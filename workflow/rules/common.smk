@@ -1,13 +1,17 @@
+# Paths, config-derived constants, and helpers (aligned with Trep_pangenome / index_Trep_refs).
+
 import csv
+import re
 from pathlib import Path
 
 
 def load_samples(path):
     with open(path, newline="") as f:
         rows = list(csv.DictReader(f))
-    for r in rows:
+    for i, r in enumerate(rows, 1):
         for k in list(r.keys()):
             r[k] = (r[k] or "").strip()
+        r["row_id"] = f"{i:04d}"
     return rows
 
 
@@ -27,25 +31,22 @@ def linear_ref_path(r, refs_dir, use_hap_subdir=False):
     return base / f"{r['linear_ref_assembly']}.fna"
 
 
-REPO = Path(workflow.basedir).parent
-
 OUT = Path(config["output_dir"])
 PGD = Path(config["pangenome_results_dir"])
 REFS = config["linear_ref_dir"]
 LOG = f"{OUT}/giraffe_logs"
 DONE = f"{OUT}/giraffe.done"
 RES = OUT / "results"
+REGIONS_FILE = Path(workflow.basedir).parent / "config" / "regions.txt"
 
 PANGENOME_DONE = config["pangenome_done_flag"]
 INDEX_DONE = config["index_done_flag"]
 USE_HAP_SUBDIR = config["linear_ref_use_haplotype_subdir"]
 FASTQ_DIR = config["fastq_dir"]
-REGIONS_FILE = REPO / "config" / "regions.txt"
-
 CORES = config["cores"]
 MEM_MB = config["mem_mb"]
 READ_GROUP = config["read_group"]
-CONDA_ENV = "envs/giraffe.yaml"
+CONDA = "envs/giraffe.yaml"
 
 GRAPHS = load_samples(config["graphs_csv"])
 SAMPLES = [r for r in load_samples(config["samples_csv"]) if r["sample_id"]]
@@ -57,6 +58,10 @@ SAMPLE_IDS = [s["sample_id"] for s in SAMPLES]
 
 def graph_row(wc):
     return GRAPH_BY_ID[wc.graph_id]
+
+
+def graph_input(wc, kind):
+    return str(PGD / graph_row(wc)[f"{kind}_basename"])
 
 
 def sample_row(wc):
@@ -81,3 +86,12 @@ def sample_out(wc):
 
 def index_out(wc):
     return f"{RES}/{wc.graph_id}/index"
+
+
+def regions_out(wc):
+    return f"{RES}/{wc.graph_id}/{wc.sample_id}/regions"
+
+
+wildcard_constraints:
+    graph_id="|".join(re.escape(g) for g in GRAPH_IDS),
+    sample_id="|".join(re.escape(s) for s in SAMPLE_IDS),

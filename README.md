@@ -15,9 +15,7 @@ Giraffe_vg/
 │   ├── Snakefile
 │   ├── rules/common.smk
 │   └── envs/giraffe.yaml         # vg, samtools, bcftools (--use-conda)
-└── scripts/
-    ├── run_giraffe.sh            # snakemake --use-conda
-    └── config_paths.sh
+└── scripts/run_giraffe.sh
 ```
 
 ## Setup
