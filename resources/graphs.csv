@@ -1,0 +1,2 @@
+graph_id,gbz_basename,dist_basename,min_basename,linear_ref_source,linear_ref_subdir,linear_ref_assembly
+trifolium_repens,trifolium_repens.d2.gbz,trifolium_repens.d2.dist,trifolium_repens.d2.min,UTM_Trep_v1.0,haploid,GCA_030408175.1_UTM_Trep_v1.0_genomic

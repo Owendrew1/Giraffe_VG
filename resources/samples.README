@@ -1,0 +1,11 @@
+# samples.csv — intentionally empty until FASTQs exist
+
+Do NOT add placeholder sample names that point at missing files.
+Snakemake will fail with MissingInputException.
+
+When reads are on Nepenthes, add one row per sample:
+
+    sample_id,r1,r2
+    my_sample,/scratch/odrew060/fastq/my_sample_R1.fq.gz,/scratch/odrew060/fastq/my_sample_R2.fq.gz
+
+Paths can be absolute or relative to fastq_dir in config/config.yaml.

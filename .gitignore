@@ -1,0 +1,5 @@
+.snakemake/
+results/
+work/
+envs/.conda/
+.DS_Store

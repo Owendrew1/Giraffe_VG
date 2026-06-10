@@ -1,0 +1,37 @@
+# Pangenome graphs from Trep_pangenome (read-only).
+pangenome_results_dir: "/scratch/odrew060/Trep_pangenome/results/trifolium_repens"
+# pangenome.done may be missing if cactus finished outside Snakemake; d2.gbz confirms graph is ready.
+pangenome_done_flag: "/scratch/odrew060/Trep_pangenome/results/trifolium_repens/trifolium_repens.d2.gbz"
+
+# Indexed linear-reference FASTAs from index_Trep_refs.
+linear_ref_dir: "/home/uottawa.o.univ/odrew060/github-repos/index_Trep_refs/results"
+linear_ref_use_haplotype_subdir: true
+index_done_flag: "/home/uottawa.o.univ/odrew060/github-repos/index_Trep_refs/results/UTM_Trep_v1.0/haploid/ref.done"
+
+graphs_csv: "../resources/graphs.csv"
+samples_csv: "../resources/samples.csv"
+regions_file: "../config/regions.txt"
+chrom_map_csv: "../config/chrom_map.tsv"
+# ASSUMPTION: chr* shorthand in regions.txt maps here if absent from chrom_map.tsv.
+reference_contig: "GCA_030408175.1_UTM_Trep_v1.0_genomic"
+
+output_dir: "/scratch/odrew060/Giraffe_vg"
+fastq_dir: "/scratch/odrew060/fastq"
+
+giraffe:
+  cores: 16
+  mem_mb: 32000
+  extra_args: ""
+
+surject:
+  cores: 8
+  read_group: "@RG\\tID:{sample}\\tSM:{sample}\\tPL:ILLUMINA"
+
+# Graph-encoded variant genotyping (SVs). false = faster first proof run (map + surject only).
+run_vg_call: false
+vg_call:
+  pack_qual: 5
+  cores: 8
+
+# "deepvariant" or "gatk" — TODO in scripts/run_small_variant_caller.sh
+small_variant_caller: "deepvariant"

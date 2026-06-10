@@ -1,0 +1,190 @@
+# Giraffe mapping + SV region summaries on cactus pangenome graphs.
+# SCAFFOLD: resources/samples.csv empty until FASTQs on Nepenthes — see STATUS.md
+# Run from repo root:
+#   ./scripts/run_giraffe.sh 4
+# Setup: conda env create -f environment.yaml
+
+from pathlib import Path
+
+configfile: "../config/config.yaml"
+include: "rules/common.smk"
+
+OUT = Path(config["output_dir"])
+PGD = Path(config["pangenome_results_dir"])
+REFS = config["linear_ref_dir"]
+USE_HAP_SUBDIR = config.get("linear_ref_use_haplotype_subdir", False)
+FASTQ_DIR = config.get("fastq_dir", "")
+LOG = f"{OUT}/giraffe_logs"
+DONE = f"{OUT}/giraffe.done"
+RES = OUT / "results"
+
+GRAPHS = load_samples(config["graphs_csv"])
+SAMPLES = [r for r in load_samples(config["samples_csv"]) if r["sample_id"]]
+GRAPH_BY_ID = {g["graph_id"]: g for g in GRAPHS}
+SAMPLE_BY_ID = {s["sample_id"]: s for s in SAMPLES}
+GRAPH_IDS = [g["graph_id"] for g in GRAPHS]
+SAMPLE_IDS = [s["sample_id"] for s in SAMPLES]
+
+GF = config["giraffe"]
+SURJECT = config["surject"]
+RUN_VG_CALL = config.get("run_vg_call", False)
+VG_CALL = config.get("vg_call", {})
+CALLER = config.get("small_variant_caller", "deepvariant")
+
+INDEX_SCRIPT = str(Path(workflow.basedir).parent / "scripts" / "build_giraffe_index.sh")
+SAMPLE_SCRIPT = str(Path(workflow.basedir).parent / "scripts" / "run_giraffe_sample.sh")
+CALLER_SCRIPT = str(Path(workflow.basedir).parent / "scripts" / "run_small_variant_caller.sh")
+REGIONS_SCRIPT = str(Path(workflow.basedir).parent / "scripts" / "summarize_sv_regions.sh")
+REPO = Path(workflow.basedir).parent
+REGIONS_FILE = str(REPO / "config" / "regions.txt")
+CHROM_MAP = str(REPO / "config" / "chrom_map.tsv")
+
+
+def graph_row(wc):
+    return GRAPH_BY_ID[wc.graph_id]
+
+
+def sample_row(wc):
+    return SAMPLE_BY_ID[wc.sample_id]
+
+
+def ref_path_for_graph(wc):
+    return str(linear_ref_path(graph_row(wc), REFS, USE_HAP_SUBDIR))
+
+
+def fastq_path(sample, field):
+    return str(resolve_fastq(sample[field], FASTQ_DIR))
+
+
+def surject_read_group(wc):
+    template = SURJECT.get(
+        "read_group",
+        "@RG\\tID:{sample}\\tSM:{sample}\\tPL:ILLUMINA",
+    )
+    return template.format(sample=wc.sample_id)
+
+
+rule all:
+    input:
+        DONE,
+
+
+rule giraffe_index:
+    """Stage Giraffe index (gbz/dist/min) from Trep_pangenome."""
+    input:
+        pangenome_done=config["pangenome_done_flag"],
+        index_done=config["index_done_flag"],
+        gbz=lambda wc: str(PGD / graph_row(wc)["gbz_basename"]),
+        dist=lambda wc: str(PGD / graph_row(wc)["dist_basename"]),
+        min=lambda wc: str(PGD / graph_row(wc)["min_basename"]),
+    output:
+        gbz=f"{RES}/{{graph_id}}/index/graph.gbz",
+        dist=f"{RES}/{{graph_id}}/index/graph.dist",
+        min=f"{RES}/{{graph_id}}/index/graph.min",
+        done=f"{RES}/{{graph_id}}/index/index.done",
+    log:
+        f"{LOG}/giraffe_index/{{graph_id}}.log",
+    params:
+        script=INDEX_SCRIPT,
+    conda:
+        "envs/vg.yaml",
+    shell:
+        "bash {params.script} {PGD} {wildcards.graph_id} {input.gbz} {input.dist} {input.min} "
+        "{RES}/{wildcards.graph_id}/index {log}"
+
+
+rule giraffe_sample:
+    """Map, surject, and optionally vg call for one sample."""
+    input:
+        index=rules.giraffe_index.output,
+        r1=lambda wc: fastq_path(sample_row(wc), "r1"),
+        r2=lambda wc: fastq_path(sample_row(wc), "r2"),
+        ref=ref_path_for_graph,
+        ref_fai=lambda wc: ref_path_for_graph(wc) + ".fai",
+    output:
+        gam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.gam",
+        gaf=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.gaf.gz",
+        bam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam",
+        bai=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam.bai",
+        vcf=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz",
+        tbi=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz.tbi",
+    log:
+        f"{LOG}/giraffe_sample/{{graph_id}}_{{sample_id}}.log",
+    params:
+        script=SAMPLE_SCRIPT,
+        extra=GF.get("extra_args", ""),
+        cores_g=GF.get("cores", 16),
+        cores_s=SURJECT.get("cores", 8),
+        read_group=surject_read_group,
+        run_vg=RUN_VG_CALL,
+        pack_qual=VG_CALL.get("pack_qual", 5),
+        cores_v=VG_CALL.get("cores", 8),
+    conda:
+        "envs/vg.yaml",
+    threads:
+        GF.get("cores", 16),
+    resources:
+        mem_mb=GF.get("mem_mb", 32000),
+    shell:
+        "bash {params.script} {input.index.gbz} {input.index.dist} {input.index.min} "
+        "{input.r1} {input.r2} {input.ref} {RES}/{wildcards.graph_id}/{wildcards.sample_id} "
+        "{wildcards.sample_id} {params.cores_g} {params.cores_s} \"{params.read_group}\" "
+        "{params.extra} {params.run_vg} {params.pack_qual} {params.cores_v} {log}"
+
+
+rule small_variant_call:
+    """Small-variant calling on surjected BAM (TODO: DeepVariant or GATK)."""
+    input:
+        bam=rules.giraffe_sample.output.bam,
+        bai=rules.giraffe_sample.output.bai,
+        ref=ref_path_for_graph,
+    output:
+        vcf=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.small_variants.vcf.gz",
+        tbi=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.small_variants.vcf.gz.tbi",
+    log:
+        f"{LOG}/small_variant_call/{{graph_id}}_{{sample_id}}.log",
+    params:
+        script=CALLER_SCRIPT,
+        caller=CALLER,
+        sample=lambda wc: wc.sample_id,
+    conda:
+        "envs/vg.yaml",
+    shell:
+        "bash {params.script} {params.caller} {input.bam} {input.ref} {output.vcf} "
+        "{params.sample} {log}"
+
+
+rule sv_regions:
+    """Subset BAM/VCF to config/regions.txt loci; write per-SV summary TSV."""
+    input:
+        bam=rules.giraffe_sample.output.bam,
+        small_vcf=rules.small_variant_call.output.vcf,
+        vg_vcf=rules.giraffe_sample.output.vcf,
+    output:
+        tsv=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.sv_regions.tsv",
+    log:
+        f"{LOG}/sv_regions/{{graph_id}}_{{sample_id}}.log",
+    params:
+        script=REGIONS_SCRIPT,
+        regions=REGIONS_FILE,
+        chrom_map=CHROM_MAP,
+        ref_contig=config.get("reference_contig", ""),
+        run_vg=RUN_VG_CALL,
+        outdir=lambda wc: f"{RES}/{wc.graph_id}/{wc.sample_id}/regions",
+    conda:
+        "envs/vg.yaml",
+    shell:
+        "bash {params.script} {params.regions} {params.chrom_map} {params.ref_contig} "
+        "{input.bam} {input.small_vcf} {input.vg_vcf} {params.run_vg} {params.outdir} {output.tsv} {log}"
+
+
+rule giraffe_done:
+    input:
+        expand(rules.giraffe_index.output.done, graph_id=GRAPH_IDS),
+        expand(rules.giraffe_sample.output.bam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS),
+        expand(rules.small_variant_call.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS),
+        expand(rules.sv_regions.output.tsv, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS),
+    output:
+        DONE,
+    shell:
+        "touch {output}"
