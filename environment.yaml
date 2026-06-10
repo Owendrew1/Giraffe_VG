@@ -1,6 +1,11 @@
+# One env: activate before running.  conda env create -f environment.yaml && conda activate giraffe_vg
+name: giraffe_vg
 channels:
   - conda-forge
   - bioconda
 dependencies:
   - python=3.12
   - snakemake=9.21.0
+  - vg
+  - samtools
+  - bcftools
