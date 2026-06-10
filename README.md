@@ -17,7 +17,6 @@ Giraffe_vg/
 │   └── envs/giraffe.yaml         # vg, samtools, bcftools (--use-conda)
 └── scripts/
     ├── run_giraffe.sh            # snakemake --use-conda
-    ├── check_giraffe.sh
     └── config_paths.sh
 ```
 
@@ -36,7 +35,6 @@ Edit `config/config.yaml`: `pangenome_results_dir`, `linear_ref_dir`, `output_di
 conda activate snakemake
 cd ~/github-repos/Giraffe_vg
 ./scripts/run_giraffe.sh 4
-bash scripts/check_giraffe.sh
 ```
 
 ```text

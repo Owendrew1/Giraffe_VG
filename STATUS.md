@@ -17,5 +17,4 @@ Index validated on Nepenthes. Full run needs FASTQs in `resources/samples.csv`.
 conda activate snakemake
 cd ~/github-repos/Giraffe_vg
 ./scripts/run_giraffe.sh 4
-bash scripts/check_giraffe.sh
 ```
