@@ -21,6 +21,7 @@ fastq_dir: "/scratch/odrew060/fastq"
 giraffe:
   cores: 16
   mem_mb: 32000
+  index_threads: 16   # dist/min rebuild if cactus symlinks are broken
   extra_args: ""
 
 surject:
@@ -33,5 +34,5 @@ vg_call:
   pack_qual: 5
   cores: 8
 
-# "deepvariant" or "gatk" — TODO in scripts/run_small_variant_caller.sh
+# "deepvariant" or "gatk" — swap-in block in workflow/Snakefile → small_variant_call
 small_variant_caller: "deepvariant"

@@ -1,67 +1,15 @@
 # Giraffe mapping + SV region summaries on cactus pangenome graphs.
-# SCAFFOLD: resources/samples.csv empty until FASTQs on Nepenthes — see STATUS.md
-# Run from repo root:
-#   ./scripts/run_giraffe.sh 4
-# Setup: conda env create -f environment.yaml
+# Run from repo root:  ./scripts/run_giraffe.sh 4
+# See STATUS.md for swap-in points (samples.csv, regions.txt, variant caller).
 
-from pathlib import Path
+import re
 
 configfile: "../config/config.yaml"
 include: "rules/common.smk"
 
-OUT = Path(config["output_dir"])
-PGD = Path(config["pangenome_results_dir"])
-REFS = config["linear_ref_dir"]
-USE_HAP_SUBDIR = config.get("linear_ref_use_haplotype_subdir", False)
-FASTQ_DIR = config.get("fastq_dir", "")
-LOG = f"{OUT}/giraffe_logs"
-DONE = f"{OUT}/giraffe.done"
-RES = OUT / "results"
-
-GRAPHS = load_samples(config["graphs_csv"])
-SAMPLES = [r for r in load_samples(config["samples_csv"]) if r["sample_id"]]
-GRAPH_BY_ID = {g["graph_id"]: g for g in GRAPHS}
-SAMPLE_BY_ID = {s["sample_id"]: s for s in SAMPLES}
-GRAPH_IDS = [g["graph_id"] for g in GRAPHS]
-SAMPLE_IDS = [s["sample_id"] for s in SAMPLES]
-
-GF = config["giraffe"]
-SURJECT = config["surject"]
-RUN_VG_CALL = config.get("run_vg_call", False)
-VG_CALL = config.get("vg_call", {})
-CALLER = config.get("small_variant_caller", "deepvariant")
-
-INDEX_SCRIPT = str(Path(workflow.basedir).parent / "scripts" / "build_giraffe_index.sh")
-SAMPLE_SCRIPT = str(Path(workflow.basedir).parent / "scripts" / "run_giraffe_sample.sh")
-CALLER_SCRIPT = str(Path(workflow.basedir).parent / "scripts" / "run_small_variant_caller.sh")
-REGIONS_SCRIPT = str(Path(workflow.basedir).parent / "scripts" / "summarize_sv_regions.sh")
-REPO = Path(workflow.basedir).parent
-REGIONS_FILE = str(REPO / "config" / "regions.txt")
-CHROM_MAP = str(REPO / "config" / "chrom_map.tsv")
-
-
-def graph_row(wc):
-    return GRAPH_BY_ID[wc.graph_id]
-
-
-def sample_row(wc):
-    return SAMPLE_BY_ID[wc.sample_id]
-
-
-def ref_path_for_graph(wc):
-    return str(linear_ref_path(graph_row(wc), REFS, USE_HAP_SUBDIR))
-
-
-def fastq_path(sample, field):
-    return str(resolve_fastq(sample[field], FASTQ_DIR))
-
-
-def surject_read_group(wc):
-    template = SURJECT.get(
-        "read_group",
-        "@RG\\tID:{sample}\\tSM:{sample}\\tPL:ILLUMINA",
-    )
-    return template.format(sample=wc.sample_id)
+wildcard_constraints:
+    graph_id="|".join(re.escape(g) for g in GRAPH_IDS),
+    sample_id="|".join(re.escape(s) for s in SAMPLE_IDS),
 
 
 rule all:
@@ -70,10 +18,10 @@ rule all:
 
 
 rule giraffe_index:
-    """Stage Giraffe index (gbz/dist/min) from Trep_pangenome."""
+    """Stage gbz/dist/min from Trep_pangenome; rebuild dist/min if symlinks are broken."""
     input:
-        pangenome_done=config["pangenome_done_flag"],
-        index_done=config["index_done_flag"],
+        pangenome_done=PANGENOME_DONE,
+        index_done=INDEX_DONE,
         gbz=lambda wc: str(PGD / graph_row(wc)["gbz_basename"]),
         dist=lambda wc: str(PGD / graph_row(wc)["dist_basename"]),
         min=lambda wc: str(PGD / graph_row(wc)["min_basename"]),
@@ -85,16 +33,40 @@ rule giraffe_index:
     log:
         f"{LOG}/giraffe_index/{{graph_id}}.log",
     params:
-        script=INDEX_SCRIPT,
+        outdir=index_out,
+        threads=INDEX_THREADS,
     conda:
-        "envs/vg.yaml",
+        CONDA_ENV,
     shell:
-        "bash {params.script} {PGD} {wildcards.graph_id} {input.gbz} {input.dist} {input.min} "
-        "{RES}/{wildcards.graph_id}/index {log}"
+        """
+        set -euo pipefail
+        exec > >(tee -a {log}) 2>&1
+        OUTDIR={params.outdir}
+        mkdir -p "$OUTDIR"
+        [[ -f {input.gbz} ]] || {{ echo "Missing gbz: {input.gbz}" >&2; exit 1; }}
+        resolve_or_rebuild() {{
+          local path="$1" kind="$2"
+          if [[ -e "$path" ]]; then echo "$path"; return; fi
+          local rebuilt="{PGD}/$(basename "$path")"
+          echo "Rebuilding $kind from {input.gbz}" >&2
+          if [[ "$kind" == min ]]; then
+            vg minifier -t {params.threads} -d 10 -o "$rebuilt" {input.gbz}
+          else
+            vg distance -t {params.threads} -o "$rebuilt" {input.gbz}
+          fi
+          echo "$rebuilt"
+        }}
+        REAL_DIST="$(resolve_or_rebuild {input.dist} dist)"
+        REAL_MIN="$(resolve_or_rebuild {input.min} min)"
+        ln -sf {input.gbz} "$OUTDIR/graph.gbz"
+        ln -sf "$REAL_DIST" "$OUTDIR/graph.dist"
+        ln -sf "$REAL_MIN" "$OUTDIR/graph.min"
+        touch "$OUTDIR/index.done"
+        """
 
 
 rule giraffe_sample:
-    """Map, surject, and optionally vg call for one sample."""
+    """vg giraffe → surject → optional vg call."""
     input:
         index=rules.giraffe_index.output,
         r1=lambda wc: fastq_path(sample_row(wc), "r1"),
@@ -111,29 +83,53 @@ rule giraffe_sample:
     log:
         f"{LOG}/giraffe_sample/{{graph_id}}_{{sample_id}}.log",
     params:
-        script=SAMPLE_SCRIPT,
-        extra=GF.get("extra_args", ""),
-        cores_g=GF.get("cores", 16),
-        cores_s=SURJECT.get("cores", 8),
-        read_group=surject_read_group,
+        outdir=sample_out,
+        extra=EXTRA_G,
+        cores_g=CORES_G,
+        cores_s=CORES_S,
+        cores_v=CORES_V,
+        pack_qual=PACK_QUAL,
         run_vg=RUN_VG_CALL,
-        pack_qual=VG_CALL.get("pack_qual", 5),
-        cores_v=VG_CALL.get("cores", 8),
+        read_group=surject_read_group,
     conda:
-        "envs/vg.yaml",
+        CONDA_ENV,
     threads:
-        GF.get("cores", 16),
+        CORES_G,
     resources:
-        mem_mb=GF.get("mem_mb", 32000),
+        mem_mb=MEM_G,
     shell:
-        "bash {params.script} {input.index.gbz} {input.index.dist} {input.index.min} "
-        "{input.r1} {input.r2} {input.ref} {RES}/{wildcards.graph_id}/{wildcards.sample_id} "
-        "{wildcards.sample_id} {params.cores_g} {params.cores_s} \"{params.read_group}\" "
-        "{params.extra} {params.run_vg} {params.pack_qual} {params.cores_v} {log}"
+        """
+        set -euo pipefail
+        exec > >(tee -a {log}) 2>&1
+        OUTDIR={params.outdir}
+        SAMPLE={wildcards.sample_id}
+        mkdir -p "$OUTDIR"
+        GAM="$OUTDIR/$SAMPLE.gam"
+        GAF="$OUTDIR/$SAMPLE.gaf.gz"
+        BAM="$OUTDIR/$SAMPLE.surject.bam"
+        VG_VCF="$OUTDIR/$SAMPLE.vg_call.vcf.gz"
+        vg giraffe -Z {input.index.gbz} -d {input.index.dist} -m {input.index.min} \\
+          -f {input.r1} -f {input.r2} -t {params.cores_g} {params.extra} -o "$GAM"
+        vg view -a "$GAM" | gzip -c > "$GAF"
+        vg surject -t {params.cores_s} -i "$GAM" -x {input.ref} -b "$BAM" -R "{params.read_group}"
+        samtools index -@ {params.cores_s} "$BAM"
+        if [[ "{params.run_vg}" == True ]]; then
+          WRK="$OUTDIR/vg_call_work"
+          mkdir -p "$WRK"
+          vg snarls {input.index.gbz} > "$WRK/snarls.snarls"
+          vg pack -x {input.index.gbz} -g "$GAM" -Q {params.pack_qual} -o "$WRK/pack.gz"
+          vg call "$WRK/pack.gz" -k "$WRK/snarls.snarls" -a -r {input.ref} -t {params.cores_v} \\
+            | bgzip -c > "$VG_VCF"
+          tabix -f -p vcf "$VG_VCF"
+        else
+          echo '##fileformat=VCFv4.2' | bgzip -c > "$VG_VCF"
+          tabix -f -p vcf "$VG_VCF"
+        fi
+        """
 
 
 rule small_variant_call:
-    """Small-variant calling on surjected BAM (TODO: DeepVariant or GATK)."""
+    """Small-variant calling on surjected BAM — swap-in DeepVariant/GATK below."""
     input:
         bam=rules.giraffe_sample.output.bam,
         bai=rules.giraffe_sample.output.bai,
@@ -144,18 +140,31 @@ rule small_variant_call:
     log:
         f"{LOG}/small_variant_call/{{graph_id}}_{{sample_id}}.log",
     params:
-        script=CALLER_SCRIPT,
         caller=CALLER,
         sample=lambda wc: wc.sample_id,
     conda:
-        "envs/vg.yaml",
+        CONDA_ENV,
     shell:
-        "bash {params.script} {params.caller} {input.bam} {input.ref} {output.vcf} "
-        "{params.sample} {log}"
+        """
+        set -euo pipefail
+        exec > >(tee -a {log}) 2>&1
+        echo "caller={params.caller} sample={params.sample}"
+        # TODO: DeepVariant or GATK — add package to workflow/envs/giraffe.yaml first
+        # case "{params.caller}" in
+        #   deepvariant) run_deepvariant --ref {input.ref} --reads {input.bam} ... ;;
+        #   gatk) gatk HaplotypeCaller -R {input.ref} -I {input.bam} -O {output.vcf} ... ;;
+        # esac
+        {{
+          echo '##fileformat=VCFv4.2'
+          echo "##reference={input.ref}"
+          echo -e '#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO'
+        }} | bgzip -c > {output.vcf}
+        tabix -f -p vcf {output.vcf}
+        """
 
 
 rule sv_regions:
-    """Subset BAM/VCF to config/regions.txt loci; write per-SV summary TSV."""
+    """Subset BAM/VCF to config/regions.txt loci; per-SV summary TSV."""
     input:
         bam=rules.giraffe_sample.output.bam,
         small_vcf=rules.small_variant_call.output.vcf,
@@ -165,17 +174,73 @@ rule sv_regions:
     log:
         f"{LOG}/sv_regions/{{graph_id}}_{{sample_id}}.log",
     params:
-        script=REGIONS_SCRIPT,
-        regions=REGIONS_FILE,
-        chrom_map=CHROM_MAP,
-        ref_contig=config.get("reference_contig", ""),
+        regions=str(REGIONS_FILE),
+        chrom_map=str(CHROM_MAP),
+        ref_contig=REF_CONTIG,
         run_vg=RUN_VG_CALL,
         outdir=lambda wc: f"{RES}/{wc.graph_id}/{wc.sample_id}/regions",
     conda:
-        "envs/vg.yaml",
+        CONDA_ENV,
     shell:
-        "bash {params.script} {params.regions} {params.chrom_map} {params.ref_contig} "
-        "{input.bam} {input.small_vcf} {input.vg_vcf} {params.run_vg} {params.outdir} {output.tsv} {log}"
+        """
+        set -euo pipefail
+        exec > >(tee -a {log}) 2>&1
+        REGIONS="{params.regions}"
+        CHROM_MAP="{params.chrom_map}"
+        REF_CONTIG="{params.ref_contig}"
+        BAM="{input.bam}"
+        SMALL_VCF="{input.small_vcf}"
+        VG_VCF="{input.vg_vcf}"
+        RUN_VG="{params.run_vg}"
+        OUTDIR="{params.outdir}"
+        OUT_TSV="{output.tsv}"
+        mkdir -p "$OUTDIR" "$(dirname "$OUT_TSV")"
+        declare -A ALIAS=()
+        if [[ -f "$CHROM_MAP" ]]; then
+          while IFS=, read -r a c; do
+            [[ "$a" == "alias" || -z "$a" || "$a" == \\#* ]] && continue
+            ALIAS["$a"]="$c"
+          done < "$CHROM_MAP"
+        fi
+        resolve_chrom() {{
+          local c="$1"
+          [[ -n "${{ALIAS[$c]:-}}" ]] && {{ echo "${{ALIAS[$c]}}"; return; }}
+          if [[ "$c" =~ ^[Cc]hr ]] && [[ -n "$REF_CONTIG" ]]; then echo "$REF_CONTIG"; return; fi
+          echo "$c"
+        }}
+        echo -e "region_id\\tlabel\\tchrom\\tstart\\tend\\tcoords\\tmean_depth\\tmapped_reads\\tmean_mapq\\tmq_0\\tmq_1_10\\tmq_11_20\\tmq_21_60\\tmq_gt60\\tsmall_variant_count\\tvg_call_variant_count" > "$OUT_TSV"
+        while IFS= read -r line || [[ -n "$line" ]]; do
+          [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+          label=""
+          [[ "$line" == *$'\\t'* ]] && {{ label="${{line#*$'\\t'}}"; line="${{line%%$'\\t'*}}"; }}
+          [[ "$line" =~ ^([^:]+):([0-9]+)-([0-9]+)$ ]] || {{ echo "Bad region: $line" >&2; exit 1; }}
+          raw_chrom="${{BASH_REMATCH[1]}}"
+          start="${{BASH_REMATCH[2]}}"
+          end="${{BASH_REMATCH[3]}}"
+          chrom="$(resolve_chrom "$raw_chrom")"
+          coords="${{chrom}}:${{start}}-${{end}}"
+          region_id="${{chrom}}_${{start}}_${{end}}"
+          region_id="${{region_id//./_}}"
+          [[ -z "$label" ]] && label="$coords"
+          locus_dir="$OUTDIR/$region_id"
+          mkdir -p "$locus_dir"
+          samtools view -b -r "$coords" -o "$locus_dir/${{region_id}}.bam" "$BAM"
+          samtools index "$locus_dir/${{region_id}}.bam"
+          bcftools view -r "$coords" -Oz -o "$locus_dir/${{region_id}}.small_variants.vcf.gz" "$SMALL_VCF"
+          tabix -f -p vcf "$locus_dir/${{region_id}}.small_variants.vcf.gz"
+          if [[ "$RUN_VG" == True ]]; then
+            bcftools view -r "$coords" -Oz -o "$locus_dir/${{region_id}}.vg_call.vcf.gz" "$VG_VCF"
+            tabix -f -p vcf "$locus_dir/${{region_id}}.vg_call.vcf.gz"
+            vg_n="$(bcftools view -H -r "$coords" "$locus_dir/${{region_id}}.vg_call.vcf.gz" | wc -l | tr -d ' ')"
+          else
+            vg_n="NA"
+          fi
+          mean_depth="$(samtools depth -r "$coords" "$BAM" | awk '{{s+=$3;n++}} END {{if(n>0) printf "%.2f", s/n; else print "0"}}')"
+          read mq_stats < <(samtools view -r "$coords" "$BAM" | awk '{{n++;s+=$5;if($5==0)a++;else if($5<=10)b++;else if($5<=20)c++;else if($5<=60)d++;else e++}} END {{if(n>0) printf "%d\\t%.2f\\t%d\\t%d\\t%d\\t%d\\t%d",n,s/n,a+0,b+0,c+0,d+0,e+0; else print "0\\t0\\t0\\t0\\t0\\t0\\t0"}}')
+          echo -e "${{region_id}}\\t${{label}}\\t${{chrom}}\\t${{start}}\\t${{end}}\\t${{coords}}\\t${{mean_depth}}\\t$(echo "$mq_stats" | awk '{{print $1}}')\\t$(echo "$mq_stats" | awk '{{print $2}}')\\t$(echo "$mq_stats" | awk '{{print $3}}')\\t$(echo "$mq_stats" | awk '{{print $4}}')\\t$(echo "$mq_stats" | awk '{{print $5}}')\\t$(echo "$mq_stats" | awk '{{print $6}}')\\t$(echo "$mq_stats" | awk '{{print $7}}')\\t$(bcftools view -H -r "$coords" "$locus_dir/${{region_id}}.small_variants.vcf.gz" | wc -l | tr -d ' ')\\t${{vg_n}}" >> "$OUT_TSV"
+        done < "$REGIONS"
+        [[ "$(wc -l < "$OUT_TSV")" -le 1 ]] && echo "WARN: no active regions in $REGIONS" >&2
+        """
 
 
 rule giraffe_done:

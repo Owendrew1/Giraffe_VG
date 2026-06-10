@@ -1,0 +1,10 @@
+# Conda env for all Giraffe_vg rules. Add project tools here (visible to everyone using this repo).
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - vg
+  - samtools
+  - bcftools
+  # - gatk4          # uncomment when wiring small_variant_call
+  # - deepvariant    # uncomment when wiring small_variant_call

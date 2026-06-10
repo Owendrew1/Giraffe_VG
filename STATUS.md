@@ -1,37 +1,44 @@
-# STATUS — read before running or citing this repo
+# STATUS
 
-**This pipeline is NOT production-ready.**
+**Scaffold — validated through `giraffe_index` on Nepenthes.** Full mapping waits on FASTQs.
 
-It is scaffold / proof-of-concept code until real inputs are wired in on Nepenthes.
+## Swap-in points (only these change when data arrives)
 
-## What is missing (do not expect a full run yet)
+| What | Where | Action |
+|------|--------|--------|
+| Sample FASTQs | `resources/samples.csv` | Add `sample_id,r1,r2` rows |
+| SV loci | `config/regions.txt` | Add `chrom:start-end` lines (UTM haploid) |
+| Variant caller | `workflow/Snakefile` → `small_variant_call` | Replace TODO block; add tool to `workflow/envs/giraffe.yaml` |
+| Graph paths | `resources/graphs.csv` | Only if pangenome index names differ |
+| Nepenthes paths | `config/config.yaml` | `output_dir`, `fastq_dir`, `pangenome_results_dir` |
+| Tool settings | `config/config.yaml` | `giraffe.cores`, `run_vg_call`, etc. |
 
-| Input | Status |
-|-------|--------|
-| Short-read FASTQs | **Not on server** — `resources/samples.csv` is intentionally empty |
-| SV coordinates | **Not set** — `config/regions.txt` has no active loci |
-| Small-variant caller | **Stub only** — `scripts/run_small_variant_caller.sh` is TODO (DeepVariant/GATK) |
+## Layout
 
-## What works today
+```text
+config/config.yaml          # paths + cores
+config/regions.txt          # SV coordinates (empty OK for now)
+resources/samples.csv       # FASTQ list (empty OK for now)
+resources/graphs.csv        # pangenome index basenames
+workflow/Snakefile          # 5 rules, shell inline
+workflow/rules/common.smk   # all paths, constants, helpers
+workflow/envs/giraffe.yaml    # vg/samtools/bcftools — add tools here
+scripts/run_giraffe.sh        # entry point
+```
 
-- Repo structure and Snakemake workflow (5 rules)
-- Points at existing Trep_pangenome graph (`trifolium_repens.d2.gbz`)
-- Index step can test graph staging + dist/min rebuild (needs conda `vg` env)
-
-## Safe commands before samples exist
+## Safe to run now (no FASTQs)
 
 ```bash
 bash scripts/validate_paths.sh
-cd workflow && snakemake -n --cores 1 --use-conda
-snakemake --cores 4 --use-conda \
+cd workflow && snakemake --cores 4 --use-conda \
   /scratch/odrew060/Giraffe_vg/results/trifolium_repens/index/index.done
 ```
 
-## Before first real mapping run
+## When FASTQs exist
 
-1. Add FASTQs to Nepenthes (e.g. `/scratch/odrew060/fastq/`)
-2. Add rows to `resources/samples.csv`
-3. Add SV loci to `config/regions.txt` when available
-4. Re-run `validate_paths.sh` until no ❌
-
-**Until then: commits here are sample/scaffold code, not validated results.**
+```bash
+# 1. edit resources/samples.csv
+# 2. bash scripts/validate_paths.sh   # no ❌
+# 3. ./scripts/run_giraffe.sh 4
+# 4. bash scripts/check_giraffe.sh
+```
