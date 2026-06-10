@@ -45,6 +45,7 @@ REGIONS_FILE = REPO / "config" / "regions.txt"
 CORES = config["cores"]
 MEM_MB = config["mem_mb"]
 READ_GROUP = config["read_group"]
+CONDA_ENV = "envs/giraffe.yaml"
 
 GRAPHS = load_samples(config["graphs_csv"])
 SAMPLES = [r for r in load_samples(config["samples_csv"]) if r["sample_id"]]

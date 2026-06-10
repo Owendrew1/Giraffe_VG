@@ -1,4 +1,7 @@
-# Run: conda activate giraffe_vg && ./scripts/run_giraffe.sh 4
+# Giraffe mapping on cactus pangenome graphs.
+# Run from repo root:
+#   ./scripts/run_giraffe.sh 4
+# Setup: conda env create -f environment.yaml  (Snakemake only; vg runs in conda per rule)
 
 import re
 
@@ -31,6 +34,8 @@ rule giraffe_index:
         f"{LOG}/giraffe_index/{{graph_id}}.log",
     params:
         outdir=index_out,
+    conda:
+        CONDA_ENV,
     shell:
         """
         set -euo pipefail
@@ -77,6 +82,8 @@ rule giraffe_sample:
         CORES,
     resources:
         mem_mb=MEM_MB,
+    conda:
+        CONDA_ENV,
     shell:
         """
         set -euo pipefail
@@ -107,11 +114,13 @@ rule small_variant_call:
         tbi=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.small_variants.vcf.gz.tbi",
     log:
         f"{LOG}/small_variant_call/{{graph_id}}_{{sample_id}}.log",
+    conda:
+        CONDA_ENV,
     shell:
         """
         set -euo pipefail
         exec > >(tee -a {log}) 2>&1
-        # TODO: DeepVariant or GATK — add to environment.yaml first
+        # TODO: DeepVariant or GATK — add to workflow/envs/giraffe.yaml first
         {{
           echo '##fileformat=VCFv4.2'
           echo "##reference={input.ref}"
@@ -133,6 +142,8 @@ rule sv_regions:
     params:
         regions=str(REGIONS_FILE),
         outdir=lambda wc: f"{RES}/{wc.graph_id}/{wc.sample_id}/regions",
+    conda:
+        CONDA_ENV,
     shell:
         """
         set -euo pipefail

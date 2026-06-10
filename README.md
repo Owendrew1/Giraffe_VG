@@ -1,26 +1,46 @@
 # Giraffe_vg
 
-Giraffe mapping on Trep_pangenome graphs → surject to UTM → variant stubs → SV region summaries.
+Giraffe mapping on **Trep_pangenome** graphs → surject to **index_Trep_refs** UTM → SV region summaries.
+
+## Layout
 
 ```text
-giraffe_index → giraffe_sample → small_variant_call → sv_regions → giraffe_done
+Giraffe_vg/
+├── environment.yaml              # Snakemake only
+├── config/config.yaml            # paths + cores
+├── config/regions.txt            # SV loci (chrom:start-end)
+├── resources/graphs.csv
+├── resources/samples.csv
+├── workflow/
+│   ├── Snakefile
+│   ├── rules/common.smk
+│   └── envs/giraffe.yaml         # vg, samtools, bcftools (--use-conda)
+└── scripts/
+    ├── run_giraffe.sh            # snakemake --use-conda
+    ├── check_giraffe.sh
+    └── config_paths.sh
 ```
 
 ## Setup
 
 ```bash
 conda env create -f environment.yaml
-conda activate giraffe_vg
+conda activate snakemake
 ```
+
+Edit `config/config.yaml`: `pangenome_results_dir`, `linear_ref_dir`, `output_dir`, `fastq_dir`.
 
 ## Run
 
 ```bash
+conda activate snakemake
+cd ~/github-repos/Giraffe_vg
 ./scripts/run_giraffe.sh 4
+bash scripts/check_giraffe.sh
 ```
 
-Edit before a full run: `resources/samples.csv`, `config/regions.txt`, `config/config.yaml` (paths).
+```text
+giraffe_index → giraffe_sample → small_variant_call → sv_regions → giraffe_done
+```
 
-Swap-in later: `workflow/Snakefile` TODO blocks for `vg call`, DeepVariant/GATK.
-
-Done: `{output_dir}/giraffe.done`
+Done flag: `{output_dir}/giraffe.done`
