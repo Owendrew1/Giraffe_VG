@@ -8,8 +8,8 @@ Index validated on Nepenthes. Full run needs FASTQs in `resources/samples.csv`.
 |------|------|
 | FASTQs | `resources/samples.csv` |
 | SV loci | `config/regions.txt` |
-| vg call | `workflow/Snakefile` → `giraffe_sample` TODO |
-| Small variants | `workflow/Snakefile` → `small_variant_call` TODO + `workflow/envs/giraffe.yaml` |
+| Which outputs to build | `config/config.yaml` → `outputs` |
+| vg call / GATK tuning | `workflow/Snakefile` → `vg_variant_call` / `small_variant_call` |
 
 ## Run (same flow as Trep_pangenome / index_Trep_refs)
 

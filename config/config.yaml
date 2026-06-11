@@ -14,3 +14,11 @@ fastq_dir: "/scratch/odrew060/fastq"
 cores: 16
 mem_mb: 32000
 read_group: "@RG\\tID:{sample}\\tSM:{sample}\\tPL:ILLUMINA"
+
+# Final targets for rule all (via giraffe_done). Steps run only if needed downstream.
+outputs:
+  bam: true
+  gam: false
+  vg_call_vcf: true
+  linear_small_variants: false
+  sv_regions: true

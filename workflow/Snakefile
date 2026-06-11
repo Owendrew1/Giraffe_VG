@@ -64,8 +64,6 @@ rule giraffe_sample:
         gam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.gam",
         bam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam",
         bai=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam.bai",
-        vcf=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz",
-        tbi=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz.tbi",
     log:
         f"{LOG}/giraffe_sample/{{graph_id}}_{{sample_id}}.log",
     params:
@@ -86,8 +84,33 @@ rule giraffe_sample:
           -f {input.r1} -f {input.r2} -t {CORES} -o {output.gam}
         vg surject -t {CORES} -i {output.gam} -x {input.ref} -b {output.bam} -R "{params.read_group}"
         samtools index -@ {CORES} {output.bam}
-        # TODO: vg snarls → pack → call (replace stub below)
-        echo '##fileformat=VCFv4.2' | bgzip -c > {output.vcf}
+        """
+
+
+rule vg_variant_call:
+    input:
+        index=rules.giraffe_index.output,
+        gam=rules.giraffe_sample.output.gam,
+        ref=ref_path_for_graph,
+    output:
+        vcf=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz",
+        tbi=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz.tbi",
+    log:
+        f"{LOG}/vg_variant_call/{{graph_id}}_{{sample_id}}.log",
+    threads:
+        CORES,
+    conda:
+        CONDA,
+    shell:
+        """
+        set -euo pipefail
+        exec > >(tee -a {log}) 2>&1
+        WRK=$(mktemp -d)
+        trap 'rm -rf "$WRK"' EXIT
+        vg snarls {input.index.gbz} > "$WRK/snarls.snarls"
+        vg pack -x {input.index.gbz} -g {input.gam} -o "$WRK/pack.gz" -t {threads}
+        vg call "$WRK/pack.gz" -k "$WRK/snarls.snarls" -a -r {input.ref} -t {threads} \\
+          | bgzip -c > {output.vcf}
         tabix -f -p vcf {output.vcf}
         """
 
@@ -102,16 +125,22 @@ rule small_variant_call:
         tbi=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.small_variants.vcf.gz.tbi",
     log:
         f"{LOG}/small_variant_call/{{graph_id}}_{{sample_id}}.log",
+    params:
+        sample=lambda wc: wc.sample_id,
+    threads:
+        CORES,
     conda:
         CONDA,
     shell:
         """
-        # TODO: DeepVariant or GATK — add to workflow/envs/giraffe.yaml first
-        {{
-          echo '##fileformat=VCFv4.2'
-          echo "##reference={input.ref}"
-          echo -e '#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO'
-        }} | bgzip -c > {output.vcf} 2> {log}
+        set -euo pipefail
+        gatk HaplotypeCaller \\
+          -R {input.ref} \\
+          -I {input.bam} \\
+          -O {output.vcf} \\
+          --sample-name {params.sample} \\
+          --native-pair-hmm-threads {threads} \\
+          2> {log}
         tabix -f -p vcf {output.vcf}
         """
 
@@ -120,7 +149,7 @@ rule sv_regions:
     input:
         bam=rules.giraffe_sample.output.bam,
         small_vcf=rules.small_variant_call.output.vcf,
-        vg_vcf=rules.giraffe_sample.output.vcf,
+        vg_vcf=rules.vg_variant_call.output.vcf,
     output:
         tsv=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.sv_regions.tsv",
     log:
@@ -161,10 +190,7 @@ rule sv_regions:
 
 rule giraffe_done:
     input:
-        expand(rules.giraffe_index.output.done, graph_id=GRAPH_IDS),
-        expand(rules.giraffe_sample.output.bam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS),
-        expand(rules.small_variant_call.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS),
-        expand(rules.sv_regions.output.tsv, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS),
+        done_inputs,
     output:
         DONE,
     shell:

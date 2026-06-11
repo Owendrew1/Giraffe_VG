@@ -48,6 +48,14 @@ MEM_MB = config["mem_mb"]
 READ_GROUP = config["read_group"]
 CONDA = "envs/giraffe.yaml"
 
+_OUT = config.get("outputs", {})
+WANT_BAM = _OUT.get("bam", True)
+WANT_GAM = _OUT.get("gam", False)
+WANT_VG_VCF = _OUT.get("vg_call_vcf", True)
+WANT_LINEAR_VCF = _OUT.get("linear_small_variants", False)
+WANT_SV_REGIONS = _OUT.get("sv_regions", True)
+NEEDS_SAMPLE = WANT_BAM or WANT_GAM or WANT_VG_VCF or WANT_LINEAR_VCF or WANT_SV_REGIONS
+
 GRAPHS = load_samples(config["graphs_csv"])
 SAMPLES = [r for r in load_samples(config["samples_csv"]) if r["sample_id"]]
 GRAPH_BY_ID = {g["graph_id"]: g for g in GRAPHS}
@@ -90,6 +98,22 @@ def index_out(wc):
 
 def regions_out(wc):
     return f"{RES}/{wc.graph_id}/{wc.sample_id}/regions"
+
+
+def done_inputs():
+    req = list(expand(rules.giraffe_index.output.done, graph_id=GRAPH_IDS))
+    if NEEDS_SAMPLE and SAMPLE_IDS:
+        if WANT_GAM:
+            req.extend(expand(rules.giraffe_sample.output.gam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+        if WANT_BAM:
+            req.extend(expand(rules.giraffe_sample.output.bam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+        if WANT_VG_VCF:
+            req.extend(expand(rules.vg_variant_call.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+        if WANT_LINEAR_VCF:
+            req.extend(expand(rules.small_variant_call.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+        if WANT_SV_REGIONS:
+            req.extend(expand(rules.sv_regions.output.tsv, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+    return req
 
 
 wildcard_constraints:

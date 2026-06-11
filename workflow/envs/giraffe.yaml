@@ -5,3 +5,4 @@ dependencies:
   - vg
   - samtools
   - bcftools
+  - gatk4

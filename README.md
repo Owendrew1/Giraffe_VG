@@ -14,7 +14,7 @@ Giraffe_vg/
 ├── workflow/
 │   ├── Snakefile
 │   ├── rules/common.smk
-│   └── envs/giraffe.yaml         # vg, samtools, bcftools (--use-conda)
+│   └── envs/giraffe.yaml         # vg, samtools, bcftools, gatk4
 └── scripts/run_giraffe.sh
 ```
 
@@ -25,7 +25,7 @@ conda env create -f environment.yaml
 conda activate snakemake
 ```
 
-Edit `config/config.yaml`: `pangenome_results_dir`, `linear_ref_dir`, `output_dir`, `fastq_dir`.
+Edit `config/config.yaml`: paths, `outputs` (which final files to build), `fastq_dir`.
 
 ## Run
 
@@ -36,7 +36,8 @@ cd ~/github-repos/Giraffe_vg
 ```
 
 ```text
-giraffe_index → giraffe_sample → small_variant_call → sv_regions → giraffe_done
+giraffe_index → giraffe_sample → vg_variant_call
+                              → small_variant_call → sv_regions → giraffe_done
 ```
 
 Done flag: `{output_dir}/giraffe.done`
