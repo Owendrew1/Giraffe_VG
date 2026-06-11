@@ -54,7 +54,12 @@ WANT_GAM = _OUT.get("gam", False)
 WANT_VG_VCF = _OUT.get("vg_call_vcf", True)
 WANT_LINEAR_VCF = _OUT.get("linear_small_variants", False)
 WANT_SV_REGIONS = _OUT.get("sv_regions", True)
-NEEDS_SAMPLE = WANT_BAM or WANT_GAM or WANT_VG_VCF or WANT_LINEAR_VCF or WANT_SV_REGIONS
+WANT_QC_FLAGSTAT = _OUT.get("qc_flagstat", True)
+WANT_QC_VG_STATS = _OUT.get("qc_vg_stats", True)
+NEEDS_SAMPLE = (
+    WANT_BAM or WANT_GAM or WANT_VG_VCF or WANT_LINEAR_VCF or WANT_SV_REGIONS
+    or WANT_QC_FLAGSTAT or WANT_QC_VG_STATS
+)
 
 GRAPHS = load_samples(config["graphs_csv"])
 SAMPLES = [r for r in load_samples(config["samples_csv"]) if r["sample_id"]]
@@ -113,6 +118,10 @@ def done_inputs():
             req.extend(expand(rules.small_variant_call.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_SV_REGIONS:
             req.extend(expand(rules.sv_regions.output.tsv, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+        if WANT_QC_FLAGSTAT:
+            req.extend(expand(rules.qc_flagstat.output, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+        if WANT_QC_VG_STATS:
+            req.extend(expand(rules.qc_vg_stats.output, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
     return req
 
 

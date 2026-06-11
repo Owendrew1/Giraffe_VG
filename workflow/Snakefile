@@ -87,6 +87,34 @@ rule giraffe_sample:
         """
 
 
+rule qc_flagstat:
+    input:
+        bam=rules.giraffe_sample.output.bam,
+        bai=rules.giraffe_sample.output.bai,
+    output:
+        f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.flagstat.txt",
+    log:
+        f"{LOG}/qc_flagstat/{{graph_id}}_{{sample_id}}.log",
+    conda:
+        CONDA,
+    shell:
+        "samtools flagstat {input.bam} > {output} 2> {log}"
+
+
+rule qc_vg_stats:
+    input:
+        index=rules.giraffe_index.output,
+        gam=rules.giraffe_sample.output.gam,
+    output:
+        f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_stats.txt",
+    log:
+        f"{LOG}/qc_vg_stats/{{graph_id}}_{{sample_id}}.log",
+    conda:
+        CONDA,
+    shell:
+        "vg stats -z {input.index.gbz} -a {input.gam} > {output} 2> {log}"
+
+
 rule vg_variant_call:
     input:
         index=rules.giraffe_index.output,

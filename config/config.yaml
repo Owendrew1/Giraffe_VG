@@ -22,3 +22,5 @@ outputs:
   vg_call_vcf: true
   linear_small_variants: false
   sv_regions: true
+  qc_flagstat: true
+  qc_vg_stats: true
