@@ -105,7 +105,7 @@ def regions_out(wc):
     return f"{RES}/{wc.graph_id}/{wc.sample_id}/regions"
 
 
-def done_inputs():
+def done_inputs(wildcards):
     req = list(expand(rules.giraffe_index.output.done, graph_id=GRAPH_IDS))
     if NEEDS_SAMPLE and SAMPLE_IDS:
         if WANT_GAM:
