@@ -48,14 +48,16 @@ rule giraffe_index:
         }}
         ln -sf {input.gbz} {params.outdir}/graph.gbz
         ln -sf "$(resolve_or_rebuild {input.dist} dist)" {params.outdir}/graph.dist
-        ln -sf "$(resolve_or_rebuild {input.min} min)" {params.outdir}/graph.min
+        ln -sf "$(resolve_or_rebuild '{input.min}' min)" {params.outdir}/graph.min
         touch {params.outdir}/index.done
         """
 
 
 rule giraffe_sample:
     input:
-        index=rules.giraffe_index.output,
+        gbz=rules.giraffe_index.output.gbz,
+        dist=rules.giraffe_index.output.dist,
+        min=rules.giraffe_index.output.min,
         r1=lambda wc: fastq_path(sample_row(wc), "r1"),
         r2=lambda wc: fastq_path(sample_row(wc), "r2"),
         ref=ref_path_for_graph,
@@ -80,7 +82,7 @@ rule giraffe_sample:
         set -euo pipefail
         exec > >(tee -a {log}) 2>&1
         mkdir -p {params.outdir}
-        vg giraffe -Z {input.index.gbz} -d {input.index.dist} -m {input.index.min} \\
+        vg giraffe -Z {input.gbz} -d {input.dist} -m {input.min} \\
           -f {input.r1} -f {input.r2} -t {CORES} -o {output.gam}
         vg surject -t {CORES} -i {output.gam} -x {input.ref} -b {output.bam} -R "{params.read_group}"
         samtools index -@ {CORES} {output.bam}
@@ -103,7 +105,7 @@ rule qc_flagstat:
 
 rule qc_vg_stats:
     input:
-        index=rules.giraffe_index.output,
+        gbz=rules.giraffe_index.output.gbz,
         gam=rules.giraffe_sample.output.gam,
     output:
         f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_stats.txt",
@@ -112,12 +114,12 @@ rule qc_vg_stats:
     conda:
         CONDA,
     shell:
-        "vg stats -z {input.index.gbz} -a {input.gam} > {output} 2> {log}"
+        "vg stats -z {input.gbz} -a {input.gam} > {output} 2> {log}"
 
 
 rule vg_variant_call:
     input:
-        index=rules.giraffe_index.output,
+        gbz=rules.giraffe_index.output.gbz,
         gam=rules.giraffe_sample.output.gam,
         ref=ref_path_for_graph,
     output:
@@ -135,8 +137,8 @@ rule vg_variant_call:
         exec > >(tee -a {log}) 2>&1
         WRK=$(mktemp -d)
         trap 'rm -rf "$WRK"' EXIT
-        vg snarls {input.index.gbz} > "$WRK/snarls.snarls"
-        vg pack -x {input.index.gbz} -g {input.gam} -o "$WRK/pack.gz" -t {threads}
+        vg snarls {input.gbz} > "$WRK/snarls.snarls"
+        vg pack -x {input.gbz} -g {input.gam} -o "$WRK/pack.gz" -t {threads}
         vg call "$WRK/pack.gz" -k "$WRK/snarls.snarls" -a -r {input.ref} -t {threads} \\
           | bgzip -c > {output.vcf}
         tabix -f -p vcf {output.vcf}
