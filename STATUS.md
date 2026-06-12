@@ -1,6 +1,6 @@
 # STATUS
 
-Index validated on Nepenthes. Full run needs FASTQs in `resources/samples.csv`.
+Index validated on Nepenthes. Test sample: `ERR14041371` in `resources/samples.csv` (download FASTQs first).
 
 ## Edit when data arrives
 

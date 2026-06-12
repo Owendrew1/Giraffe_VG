@@ -15,12 +15,12 @@ cores: 16
 mem_mb: 32000
 read_group: "@RG\\tID:{sample}\\tSM:{sample}\\tPL:ILLUMINA"
 
-# Final targets for rule all (via giraffe_done). Steps run only if needed downstream.
+# Test run: ERR14041371 — all primary outputs on (gam off to save disk).
 outputs:
   bam: true
   gam: false
   vg_call_vcf: true
-  linear_small_variants: false
+  linear_small_variants: true
   sv_regions: true
   qc_flagstat: true
   qc_vg_stats: true
