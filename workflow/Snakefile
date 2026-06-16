@@ -95,7 +95,6 @@ rule giraffe_surject:
         f"{LOG}/giraffe_surject/{{graph_id}}_{{sample_id}}.log",
     params:
         outdir=sample_out,
-        ref_path=ref_path_name_for_graph,
         read_group=surject_read_group,
     threads:
         CORES,
@@ -106,7 +105,7 @@ rule giraffe_surject:
         set -euo pipefail
         exec > >(tee -a {log}) 2>&1
         mkdir -p {params.outdir}
-        vg surject -t {threads} -i '{input.gam}' -x '{input.gbz}' -p '{params.ref_path}' \\
+        vg surject -t {threads} -i '{input.gam}' -x '{input.gbz}' \\
           -b '{output.bam}' -N {wildcards.sample_id} -R "{params.read_group}"
         samtools index -@ {threads} '{output.bam}'
         """
