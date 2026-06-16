@@ -90,7 +90,11 @@ def fastq_path(sample, field):
 
 
 def surject_read_group(wc):
-    return READ_GROUP.format(sample=wc.sample_id).replace("\\t", "\t")
+    return READ_GROUP.format(sample=wc.sample_id)
+
+
+def ref_path_name_for_graph(wc):
+    return graph_row(wc)["linear_ref_assembly"]
 
 
 def sample_out(wc):
@@ -109,9 +113,9 @@ def done_inputs(wildcards):
     req = list(expand(rules.giraffe_index.output.done, graph_id=GRAPH_IDS))
     if NEEDS_SAMPLE and SAMPLE_IDS:
         if WANT_GAM:
-            req.extend(expand(rules.giraffe_sample.output.gam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+            req.extend(expand(rules.giraffe_map.output.gam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_BAM:
-            req.extend(expand(rules.giraffe_sample.output.bam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+            req.extend(expand(rules.giraffe_surject.output.bam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_VG_VCF:
             req.extend(expand(rules.vg_variant_call.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_LINEAR_VCF:

@@ -55,24 +55,19 @@ rule giraffe_index:
         """
 
 
-rule giraffe_sample:
+rule giraffe_map:
     input:
         gbz=rules.giraffe_index.output.gbz,
         dist=rules.giraffe_index.output.dist,
         min=rules.giraffe_index.output.min,
         r1=lambda wc: fastq_path(sample_row(wc), "r1"),
         r2=lambda wc: fastq_path(sample_row(wc), "r2"),
-        ref=ref_path_for_graph,
-        ref_fai=lambda wc: ref_path_for_graph(wc) + ".fai",
     output:
         gam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.gam",
-        bam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam",
-        bai=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam.bai",
     log:
-        f"{LOG}/giraffe_sample/{{graph_id}}_{{sample_id}}.log",
+        f"{LOG}/giraffe_map/{{graph_id}}_{{sample_id}}.log",
     params:
         outdir=sample_out,
-        read_group=surject_read_group,
     threads:
         CORES,
     resources:
@@ -84,17 +79,43 @@ rule giraffe_sample:
         set -euo pipefail
         exec > >(tee -a {log}) 2>&1
         mkdir -p {params.outdir}
-        vg giraffe -Z {input.gbz} -d {input.dist} -m {input.min} \\
-          -f {input.r1} -f {input.r2} -t {threads} > '{output.gam}'
-        vg surject -t {threads} -i '{output.gam}' -x {input.ref} -b '{output.bam}' -R "{params.read_group}"
+        vg giraffe -p -Z '{input.gbz}' -d '{input.dist}' -m '{input.min}' \\
+          -f '{input.r1}' -f '{input.r2}' -t {threads} > '{output.gam}'
+        """
+
+
+rule giraffe_surject:
+    input:
+        gbz=rules.giraffe_index.output.gbz,
+        gam=rules.giraffe_map.output.gam,
+    output:
+        bam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam",
+        bai=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam.bai",
+    log:
+        f"{LOG}/giraffe_surject/{{graph_id}}_{{sample_id}}.log",
+    params:
+        outdir=sample_out,
+        ref_path=ref_path_name_for_graph,
+        read_group=surject_read_group,
+    threads:
+        CORES,
+    conda:
+        CONDA,
+    shell:
+        """
+        set -euo pipefail
+        exec > >(tee -a {log}) 2>&1
+        mkdir -p {params.outdir}
+        vg surject -t {threads} -i '{input.gam}' -x '{input.gbz}' -p '{params.ref_path}' \\
+          -b '{output.bam}' -N {wildcards.sample_id} -R "{params.read_group}"
         samtools index -@ {threads} '{output.bam}'
         """
 
 
 rule qc_flagstat:
     input:
-        bam=rules.giraffe_sample.output.bam,
-        bai=rules.giraffe_sample.output.bai,
+        bam=rules.giraffe_surject.output.bam,
+        bai=rules.giraffe_surject.output.bai,
     output:
         f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.flagstat.txt",
     log:
@@ -108,7 +129,7 @@ rule qc_flagstat:
 rule qc_vg_stats:
     input:
         gbz=rules.giraffe_index.output.gbz,
-        gam=rules.giraffe_sample.output.gam,
+        gam=rules.giraffe_map.output.gam,
     output:
         f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_stats.txt",
     log:
@@ -122,7 +143,7 @@ rule qc_vg_stats:
 rule vg_variant_call:
     input:
         gbz=rules.giraffe_index.output.gbz,
-        gam=rules.giraffe_sample.output.gam,
+        gam=rules.giraffe_map.output.gam,
         ref=ref_path_for_graph,
     output:
         vcf=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz",
@@ -149,8 +170,8 @@ rule vg_variant_call:
 
 rule small_variant_call:
     input:
-        bam=rules.giraffe_sample.output.bam,
-        bai=rules.giraffe_sample.output.bai,
+        bam=rules.giraffe_surject.output.bam,
+        bai=rules.giraffe_surject.output.bai,
         ref=ref_path_for_graph,
     output:
         vcf=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.small_variants.vcf.gz",
@@ -179,7 +200,7 @@ rule small_variant_call:
 
 rule sv_regions:
     input:
-        bam=rules.giraffe_sample.output.bam,
+        bam=rules.giraffe_surject.output.bam,
         small_vcf=rules.small_variant_call.output.vcf,
         vg_vcf=rules.vg_variant_call.output.vcf,
     output:

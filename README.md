@@ -36,7 +36,7 @@ cd ~/github-repos/Giraffe_vg
 ```
 
 ```text
-giraffe_index → giraffe_sample → vg_variant_call
+giraffe_index → giraffe_map → giraffe_surject → vg_variant_call
                               → small_variant_call → sv_regions → giraffe_done
 ```
 

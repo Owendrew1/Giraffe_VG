@@ -13,7 +13,7 @@ fastq_dir: "/scratch/odrew060/fastq"
 
 cores: 16
 mem_mb: 32000
-read_group: "@RG\\tID:{sample}\\tSM:{sample}\\tPL:ILLUMINA"
+read_group: "ID:{sample} SM:{sample} PL:ILLUMINA"
 
 # Test run: ERR14041371 — all primary outputs on (gam off to save disk).
 outputs:
