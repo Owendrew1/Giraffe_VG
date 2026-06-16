@@ -97,8 +97,9 @@ rule giraffe_surject:
         set -euo pipefail
         exec > >(tee -a {log}) 2>&1
         mkdir -p {params.outdir}
-        vg surject -t {threads} -i '{input.gam}' -x '{input.gbz}' \\
-          -b '{output.bam}' -N {wildcards.sample_id} -R "{params.read_group}"
+        vg surject -t {threads} -x '{input.gbz}' -b \\
+          -N {wildcards.sample_id} -R "{params.read_group}" \\
+          '{input.gam}' > '{output.bam}'
         samtools index -@ {threads} '{output.bam}'
         """
 
