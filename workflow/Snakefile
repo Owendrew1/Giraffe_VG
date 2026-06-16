@@ -85,7 +85,7 @@ rule giraffe_sample:
         exec > >(tee -a {log}) 2>&1
         mkdir -p {params.outdir}
         vg giraffe -Z {input.gbz} -d {input.dist} -m {input.min} \\
-          -f {input.r1} -f {input.r2} -t {threads} -o '{output.gam}'
+          -f {input.r1} -f {input.r2} -t {threads} > '{output.gam}'
         vg surject -t {threads} -i '{output.gam}' -x {input.ref} -b '{output.bam}' -R "{params.read_group}"
         samtools index -@ {threads} '{output.bam}'
         """

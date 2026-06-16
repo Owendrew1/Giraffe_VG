@@ -90,7 +90,7 @@ def fastq_path(sample, field):
 
 
 def surject_read_group(wc):
-    return READ_GROUP.format(sample=wc.sample_id)
+    return READ_GROUP.format(sample=wc.sample_id).replace("\\t", "\t")
 
 
 def sample_out(wc):
