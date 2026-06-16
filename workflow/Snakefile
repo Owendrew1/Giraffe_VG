@@ -21,6 +21,7 @@ rule giraffe_index:
         gbz=f"{RES}/{{graph_id}}/index/graph.gbz",
         dist=f"{RES}/{{graph_id}}/index/graph.dist",
         min=f"{RES}/{{graph_id}}/index/graph.min",
+        zipcodes=f"{RES}/{{graph_id}}/index/graph.zipcodes",
         done=f"{RES}/{{graph_id}}/index/index.done",
     log:
         f"{LOG}/giraffe_index/{{graph_id}}.log",
@@ -37,9 +38,10 @@ rule giraffe_index:
         OUTDIR={params.outdir}
         mkdir -p "$OUTDIR"
         ln -sf '{input.gbz}' "$OUTDIR/graph.gbz"
-        # Rebuild dist/min with this env's vg — cactus indexes are often wrong vg version.
-        vg distance -t {threads} -o "$OUTDIR/graph.dist" "$OUTDIR/graph.gbz"
-        vg minifier -t {threads} -d 10 -o "$OUTDIR/graph.min" "$OUTDIR/graph.gbz"
+        # Rebuild dist/min with this env's vg — cactus indexes are wrong vg version.
+        vg index -t {threads} -j "$OUTDIR/graph.dist" "$OUTDIR/graph.gbz"
+        vg minimizer -t {threads} -d "$OUTDIR/graph.dist" -o "$OUTDIR/graph.min" \\
+          -z "$OUTDIR/graph.zipcodes" "$OUTDIR/graph.gbz"
         touch "$OUTDIR/index.done"
         """
 
@@ -49,6 +51,7 @@ rule giraffe_map:
         gbz=rules.giraffe_index.output.gbz,
         dist=rules.giraffe_index.output.dist,
         min=rules.giraffe_index.output.min,
+        zipcodes=rules.giraffe_index.output.zipcodes,
         r1=lambda wc: fastq_path(sample_row(wc), "r1"),
         r2=lambda wc: fastq_path(sample_row(wc), "r2"),
     output:
@@ -68,7 +71,7 @@ rule giraffe_map:
         set -euo pipefail
         exec > >(tee -a {log}) 2>&1
         mkdir -p {params.outdir}
-        vg giraffe -p -Z '{input.gbz}' -d '{input.dist}' -m '{input.min}' \\
+        vg giraffe -p -Z '{input.gbz}' -d '{input.dist}' -m '{input.min}' -z '{input.zipcodes}' \\
           -f '{input.r1}' -f '{input.r2}' -t {threads} > '{output.gam}'
         """
 
