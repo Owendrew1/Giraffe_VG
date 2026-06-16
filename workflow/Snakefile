@@ -28,6 +28,8 @@ rule giraffe_index:
         f"{LOG}/giraffe_index/{{graph_id}}.log",
     params:
         outdir=index_out,
+    threads:
+        CORES,
     conda:
         CONDA,
     shell:
@@ -40,9 +42,9 @@ rule giraffe_index:
           if [[ -e "$path" ]]; then echo "$path"; return; fi
           local rebuilt="{PGD}/$(basename "$path")"
           if [[ "$kind" == min ]]; then
-            vg minifier -t {CORES} -d 10 -o "$rebuilt" {input.gbz}
+            vg minifier -t {threads} -d 10 -o "$rebuilt" {input.gbz}
           else
-            vg distance -t {CORES} -o "$rebuilt" {input.gbz}
+            vg distance -t {threads} -o "$rebuilt" {input.gbz}
           fi
           echo "$rebuilt"
         }}
@@ -83,9 +85,9 @@ rule giraffe_sample:
         exec > >(tee -a {log}) 2>&1
         mkdir -p {params.outdir}
         vg giraffe -Z {input.gbz} -d {input.dist} -m {input.min} \\
-          -f {input.r1} -f {input.r2} -t {CORES} -o {output.gam}
-        vg surject -t {CORES} -i {output.gam} -x {input.ref} -b {output.bam} -R "{params.read_group}"
-        samtools index -@ {CORES} {output.bam}
+          -f {input.r1} -f {input.r2} -t {threads} -o '{output.gam}'
+        vg surject -t {threads} -i '{output.gam}' -x {input.ref} -b '{output.bam}' -R "{params.read_group}"
+        samtools index -@ {threads} '{output.bam}'
         """
 
 
@@ -114,7 +116,7 @@ rule qc_vg_stats:
     conda:
         CONDA,
     shell:
-        "vg stats -z {input.gbz} -a {input.gam} > {output} 2> {log}"
+        "vg stats -z {input.gbz} -a '{input.gam}' > {output} 2> {log}"
 
 
 rule vg_variant_call:
@@ -138,7 +140,7 @@ rule vg_variant_call:
         WRK=$(mktemp -d)
         trap 'rm -rf "$WRK"' EXIT
         vg snarls {input.gbz} > "$WRK/snarls.snarls"
-        vg pack -x {input.gbz} -g {input.gam} -o "$WRK/pack.gz" -t {threads}
+        vg pack -x {input.gbz} -g '{input.gam}' -o "$WRK/pack.gz" -t {threads}
         vg call "$WRK/pack.gz" -k "$WRK/snarls.snarls" -a -r {input.ref} -t {threads} \\
           | bgzip -c > {output.vcf}
         tabix -f -p vcf {output.vcf}
