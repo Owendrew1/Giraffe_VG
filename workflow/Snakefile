@@ -17,8 +17,6 @@ rule giraffe_index:
         pangenome_done=PANGENOME_DONE,
         index_done=INDEX_DONE,
         gbz=lambda wc: graph_input(wc, "gbz"),
-        dist=lambda wc: graph_input(wc, "dist"),
-        min=lambda wc: graph_input(wc, "min"),
     output:
         gbz=f"{RES}/{{graph_id}}/index/graph.gbz",
         dist=f"{RES}/{{graph_id}}/index/graph.dist",
@@ -36,22 +34,13 @@ rule giraffe_index:
         """
         set -euo pipefail
         exec > >(tee -a {log}) 2>&1
-        mkdir -p {params.outdir}
-        resolve_or_rebuild() {{
-          local path="$1" kind="$2"
-          if [[ -e "$path" ]]; then echo "$path"; return; fi
-          local rebuilt="{PGD}/$(basename "$path")"
-          if [[ "$kind" == min ]]; then
-            vg minifier -t {threads} -d 10 -o "$rebuilt" {input.gbz}
-          else
-            vg distance -t {threads} -o "$rebuilt" {input.gbz}
-          fi
-          echo "$rebuilt"
-        }}
-        ln -sf {input.gbz} {params.outdir}/graph.gbz
-        ln -sf "$(resolve_or_rebuild {input.dist} dist)" {params.outdir}/graph.dist
-        ln -sf "$(resolve_or_rebuild '{input.min}' min)" {params.outdir}/graph.min
-        touch {params.outdir}/index.done
+        OUTDIR={params.outdir}
+        mkdir -p "$OUTDIR"
+        ln -sf '{input.gbz}' "$OUTDIR/graph.gbz"
+        # Rebuild dist/min with this env's vg — cactus indexes are often wrong vg version.
+        vg distance -t {threads} -o "$OUTDIR/graph.dist" "$OUTDIR/graph.gbz"
+        vg minifier -t {threads} -d 10 -o "$OUTDIR/graph.min" "$OUTDIR/graph.gbz"
+        touch "$OUTDIR/index.done"
         """
 
 
