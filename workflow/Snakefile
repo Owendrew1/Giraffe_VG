@@ -152,11 +152,11 @@ rule vg_variant_call:
         exec > >(tee -a {log}) 2>&1
         WRK=$(mktemp -d)
         trap 'rm -rf "$WRK"' EXIT
-        vg snarls {input.gbz} > "$WRK/snarls.snarls"
-        vg pack -x {input.gbz} -g '{input.gam}' -o "$WRK/pack.gz" -t {threads}
-        vg call "$WRK/pack.gz" -k "$WRK/snarls.snarls" -a -r {input.ref} -t {threads} \\
-          | bgzip -c > {output.vcf}
-        tabix -f -p vcf {output.vcf}
+        vg snarls '{input.gbz}' > "$WRK/snarls.snarls"
+        vg pack -x '{input.gbz}' -g '{input.gam}' -o "$WRK/pack.gz" -t {threads}
+        vg call '{input.gbz}' -k "$WRK/pack.gz" -r "$WRK/snarls.snarls" -a \\
+          -f '{input.ref}' -t {threads} | bgzip -c > '{output.vcf}'
+        tabix -f -p vcf '{output.vcf}'
         """
 
 
