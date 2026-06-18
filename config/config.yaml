@@ -20,7 +20,7 @@ outputs:
   bam: true
   gam: false
   vg_call_vcf: true
-  linear_small_variants: true
-  sv_regions: true
+  linear_small_variants: false
+  sv_regions: false
   qc_flagstat: true
   qc_vg_stats: true
