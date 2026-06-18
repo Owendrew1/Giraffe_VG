@@ -99,7 +99,7 @@ rule giraffe_surject:
         mkdir -p {params.outdir}
         vg surject -t {threads} -x '{input.gbz}' -b \\
           -N {wildcards.sample_id} -R "{params.read_group}" \\
-          '{input.gam}' > '{output.bam}'
+          '{input.gam}' | samtools sort -@ {threads} -o '{output.bam}'
         samtools index -@ {threads} '{output.bam}'
         """
 
