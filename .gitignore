@@ -1,4 +1,5 @@
 .snakemake/
 results/
 .DS_Store
+__pycache__/
 resources/all_clover_samples.txt
