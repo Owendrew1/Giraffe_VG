@@ -8,10 +8,15 @@ index_done_flag: "/home/uottawa.o.univ/odrew060/github-repos/index_Trep_refs/res
 graphs_csv: "../resources/graphs.csv"
 samples_csv: "../resources/samples.csv"
 
+# James align_trifolium_reads TSV (not wired into Snakefile yet — next commits).
+samples_file: "../resources/samples_test.tsv"
+# Full cohort: run scripts/sync_sample_sheet.sh, then point samples_file at:
+# samples_file: "../resources/all_clover_samples.txt"
+
 output_dir: "/scratch/odrew060/Giraffe_vg"
 fastq_dir: "/scratch/odrew060/fastq"
 
-cores: 16
+cores: 32
 mem_mb: 32000
 read_group: "ID:{sample} SM:{sample} PL:ILLUMINA"
 
