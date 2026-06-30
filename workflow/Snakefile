@@ -46,18 +46,18 @@ rule giraffe_index:
         """
 
 
-rule giraffe_map:
+rule giraffe_map_lane:
     input:
         gbz=rules.giraffe_index.output.gbz,
         dist=rules.giraffe_index.output.dist,
         min=rules.giraffe_index.output.min,
         zipcodes=rules.giraffe_index.output.zipcodes,
-        r1=sample_fastq_r1,
-        r2=sample_fastq_r2,
+        r1=lane_r1,
+        r2=lane_r2,
     output:
-        gam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.gam",
+        gam=temp(f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.lane{{lane}}.gam"),
     log:
-        f"{LOG}/giraffe_map/{{graph_id}}_{{sample_id}}.log",
+        f"{LOG}/giraffe_map/{{graph_id}}_{{sample_id}}_lane{{lane}}.log",
     params:
         outdir=sample_out,
     threads:
@@ -76,10 +76,40 @@ rule giraffe_map:
         """
 
 
+rule merge_lane_gams:
+    input:
+        gams=lambda wc: [
+            f"{RES}/{wc.graph_id}/{wc.sample_id}/{wc.sample_id}.lane{lane}.gam"
+            for lane in SAMPLE_LANES[wc.sample_id]
+        ],
+    output:
+        gam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.gam",
+    log:
+        f"{LOG}/merge_lane_gams/{{graph_id}}_{{sample_id}}.log",
+    params:
+        outdir=sample_out,
+    threads:
+        CORES,
+    conda:
+        CONDA,
+    shell:
+        """
+        set -euo pipefail
+        exec > >(tee -a {log}) 2>&1
+        mkdir -p {params.outdir}
+        GAMS=({input.gams})
+        if [ "${{#GAMS[@]}}" -eq 1 ]; then
+          cp "${{GAMS[0]}}" '{output.gam}'
+        else
+          vg view $(printf ' -G %s' "${{GAMS[@]}}") > '{output.gam}'
+        fi
+        """
+
+
 rule giraffe_surject:
     input:
         gbz=rules.giraffe_index.output.gbz,
-        gam=rules.giraffe_map.output.gam,
+        gam=rules.merge_lane_gams.output.gam,
     output:
         bam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam",
         bai=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam.bai",
@@ -121,7 +151,7 @@ rule qc_flagstat:
 rule qc_vg_stats:
     input:
         gbz=rules.giraffe_index.output.gbz,
-        gam=rules.giraffe_map.output.gam,
+        gam=rules.merge_lane_gams.output.gam,
     output:
         f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_stats.txt",
     log:
@@ -135,7 +165,7 @@ rule qc_vg_stats:
 rule vg_variant_call:
     input:
         gbz=rules.giraffe_index.output.gbz,
-        gam=rules.giraffe_map.output.gam,
+        gam=rules.merge_lane_gams.output.gam,
         ref=ref_path_for_graph,
     output:
         vcf=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz",

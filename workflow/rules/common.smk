@@ -87,13 +87,6 @@ if SKIP_MISSING:
     SAMPLE_IDS = [s for s in SAMPLE_IDS if s in SAMPLE_R1]
     SAMPLE_ROWS = [r for r in SAMPLE_ROWS if r["sample"] in SAMPLE_R1]
 
-MULTI_LANE = [s for s in SAMPLE_IDS if len(SAMPLE_LANES[s]) > 1]
-if MULTI_LANE:
-    raise ValueError(
-        "Multi-lane samples need per-lane mapping (next commit). Examples: "
-        + ", ".join(MULTI_LANE[:5])
-    )
-
 SAMPLE_BY_ID = {r["sample"]: r for r in SAMPLE_ROWS}
 
 
@@ -113,12 +106,16 @@ def ref_path_for_graph(wc):
     return str(linear_ref_path(graph_row(wc), REFS, USE_HAP_SUBDIR))
 
 
-def sample_fastq_r1(wc):
-    return SAMPLE_R1[wc.sample_id][0]
+def lane_r1(wc):
+    return SAMPLE_R1[wc.sample_id][int(wc.lane)]
 
 
-def sample_fastq_r2(wc):
-    return SAMPLE_R2[wc.sample_id][0]
+def lane_r2(wc):
+    return SAMPLE_R2[wc.sample_id][int(wc.lane)]
+
+
+def merged_gam_path(wc):
+    return f"{RES}/{wc.graph_id}/{wc.sample_id}/{wc.sample_id}.gam"
 
 
 def surject_read_group(wc):
@@ -145,7 +142,7 @@ def done_inputs(wildcards):
     req = list(expand(rules.giraffe_index.output.done, graph_id=GRAPH_IDS))
     if NEEDS_SAMPLE and SAMPLE_IDS:
         if WANT_GAM:
-            req.extend(expand(rules.giraffe_map.output.gam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+            req.extend(expand(merged_gam_path, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_BAM:
             req.extend(expand(rules.giraffe_surject.output.bam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_VG_VCF:
@@ -164,3 +161,4 @@ def done_inputs(wildcards):
 wildcard_constraints:
     graph_id="|".join(re.escape(g) for g in GRAPH_IDS),
     sample_id="|".join(re.escape(s) for s in SAMPLE_IDS),
+    lane="[0-9]+",
