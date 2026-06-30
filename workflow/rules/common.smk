@@ -1,27 +1,34 @@
-# Paths, config-derived constants, and helpers (aligned with Trep_pangenome / index_Trep_refs).
+# Paths, sample metadata, FASTQ discovery, and helpers.
 
 import csv
 import re
+import sys
 from pathlib import Path
 
+sys.path.insert(0, workflow.sourcepath("scripts"))
+from discover_fastqs import discover_cohort
 
-def load_samples(path):
+
+def load_graphs(path):
     with open(path, newline="") as f:
         rows = list(csv.DictReader(f))
-    for i, r in enumerate(rows, 1):
+    for r in rows:
         for k in list(r.keys()):
             r[k] = (r[k] or "").strip()
-        r["row_id"] = f"{i:04d}"
     return rows
 
 
-def resolve_fastq(path, fastq_dir=""):
-    p = Path(path)
-    if p.is_absolute():
-        return p
-    if fastq_dir:
-        return Path(fastq_dir) / p
-    return p
+def load_sample_sheet(path):
+    with open(path, newline="") as f:
+        rows = list(csv.DictReader(f, delimiter="\t"))
+    out = []
+    for i, r in enumerate(rows, 1):
+        for k in list(r.keys()):
+            r[k] = (r[k] or "").strip()
+        if r.get("sample"):
+            r["row_id"] = f"{i:04d}"
+            out.append(r)
+    return out
 
 
 def linear_ref_path(r, refs_dir, use_hap_subdir=False):
@@ -45,7 +52,8 @@ USE_HAP_SUBDIR = config["linear_ref_use_haplotype_subdir"]
 FASTQ_DIR = config["fastq_dir"]
 CORES = config["cores"]
 MEM_MB = config["mem_mb"]
-READ_GROUP = config["read_group"]
+READ_GROUP = config.get("read_group", "ID:{sample} SM:{sample} PL:ILLUMINA")
+SKIP_MISSING = config.get("skip_missing_fastqs", False)
 CONDA = "envs/giraffe.yaml"
 
 _OUT = config.get("outputs", {})
@@ -53,7 +61,7 @@ WANT_BAM = _OUT.get("bam", True)
 WANT_GAM = _OUT.get("gam", False)
 WANT_VG_VCF = _OUT.get("vg_call_vcf", True)
 WANT_LINEAR_VCF = _OUT.get("linear_small_variants", False)
-WANT_SV_REGIONS = _OUT.get("sv_regions", True)
+WANT_SV_REGIONS = _OUT.get("sv_regions", False)
 WANT_QC_FLAGSTAT = _OUT.get("qc_flagstat", True)
 WANT_QC_VG_STATS = _OUT.get("qc_vg_stats", True)
 NEEDS_SAMPLE = (
@@ -61,12 +69,32 @@ NEEDS_SAMPLE = (
     or WANT_QC_FLAGSTAT or WANT_QC_VG_STATS
 )
 
-GRAPHS = load_samples(config["graphs_csv"])
-SAMPLES = [r for r in load_samples(config["samples_csv"]) if r["sample_id"]]
+GRAPHS = load_graphs(config["graphs_csv"])
 GRAPH_BY_ID = {g["graph_id"]: g for g in GRAPHS}
-SAMPLE_BY_ID = {s["sample_id"]: s for s in SAMPLES}
 GRAPH_IDS = [g["graph_id"] for g in GRAPHS]
-SAMPLE_IDS = [s["sample_id"] for s in SAMPLES]
+
+SAMPLE_ROWS = load_sample_sheet(config["samples_file"])
+SAMPLE_IDS = [r["sample"] for r in SAMPLE_ROWS]
+PROJECT = {r["sample"]: r.get("initial_project", "") for r in SAMPLE_ROWS}
+COV_CAT = {r["sample"]: r.get("cov_cat", "") for r in SAMPLE_ROWS}
+
+SAMPLE_R1, SAMPLE_R2, SAMPLE_LANES, MISSING_FASTQS = discover_cohort(
+    FASTQ_DIR,
+    SAMPLE_IDS,
+    skip_missing=SKIP_MISSING,
+)
+if SKIP_MISSING:
+    SAMPLE_IDS = [s for s in SAMPLE_IDS if s in SAMPLE_R1]
+    SAMPLE_ROWS = [r for r in SAMPLE_ROWS if r["sample"] in SAMPLE_R1]
+
+MULTI_LANE = [s for s in SAMPLE_IDS if len(SAMPLE_LANES[s]) > 1]
+if MULTI_LANE:
+    raise ValueError(
+        "Multi-lane samples need per-lane mapping (next commit). Examples: "
+        + ", ".join(MULTI_LANE[:5])
+    )
+
+SAMPLE_BY_ID = {r["sample"]: r for r in SAMPLE_ROWS}
 
 
 def graph_row(wc):
@@ -85,8 +113,12 @@ def ref_path_for_graph(wc):
     return str(linear_ref_path(graph_row(wc), REFS, USE_HAP_SUBDIR))
 
 
-def fastq_path(sample, field):
-    return str(resolve_fastq(sample[field], FASTQ_DIR))
+def sample_fastq_r1(wc):
+    return SAMPLE_R1[wc.sample_id][0]
+
+
+def sample_fastq_r2(wc):
+    return SAMPLE_R2[wc.sample_id][0]
 
 
 def surject_read_group(wc):

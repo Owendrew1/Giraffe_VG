@@ -52,8 +52,8 @@ rule giraffe_map:
         dist=rules.giraffe_index.output.dist,
         min=rules.giraffe_index.output.min,
         zipcodes=rules.giraffe_index.output.zipcodes,
-        r1=lambda wc: fastq_path(sample_row(wc), "r1"),
-        r2=lambda wc: fastq_path(sample_row(wc), "r2"),
+        r1=sample_fastq_r1,
+        r2=sample_fastq_r2,
     output:
         gam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.gam",
     log:

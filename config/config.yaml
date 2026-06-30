@@ -6,15 +6,15 @@ linear_ref_use_haplotype_subdir: true
 index_done_flag: "/home/uottawa.o.univ/odrew060/github-repos/index_Trep_refs/results/UTM_Trep_v1.0/haploid/ref.done"
 
 graphs_csv: "../resources/graphs.csv"
-samples_csv: "../resources/samples.csv"
 
-# James align_trifolium_reads TSV (not wired into Snakefile yet — next commits).
+# James align_trifolium_reads TSV (column: sample). Discovered under fastq_dir.
 samples_file: "../resources/samples_test.tsv"
-# Full cohort: run scripts/sync_sample_sheet.sh, then point samples_file at:
+# Full cohort: run scripts/sync_sample_sheet.sh, then:
 # samples_file: "../resources/all_clover_samples.txt"
 
 output_dir: "/scratch/odrew060/Giraffe_vg"
-fastq_dir: "/scratch/odrew060/fastq"
+fastq_dir: "/archive/raw_data/fastq"
+skip_missing_fastqs: false
 
 cores: 32
 mem_mb: 32000
