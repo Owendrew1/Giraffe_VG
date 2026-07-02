@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, workflow.sourcepath("scripts"))
+sys.path.insert(0, str(Path(workflow.basedir) / "scripts"))
 from discover_fastqs import discover_cohort
 
 
