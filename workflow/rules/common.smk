@@ -60,13 +60,15 @@ _OUT = config.get("outputs", {})
 WANT_BAM = _OUT.get("bam", True)
 WANT_GAM = _OUT.get("gam", False)
 WANT_VG_VCF = _OUT.get("vg_call_vcf", True)
+WANT_VCF_FILTER = _OUT.get("vcf_filter", True)
 WANT_LINEAR_VCF = _OUT.get("linear_small_variants", False)
 WANT_SV_REGIONS = _OUT.get("sv_regions", False)
 WANT_QC_FLAGSTAT = _OUT.get("qc_flagstat", True)
+WANT_QC_MOSDEPTH = _OUT.get("qc_mosdepth", True)
 WANT_QC_VG_STATS = _OUT.get("qc_vg_stats", True)
 NEEDS_SAMPLE = (
-    WANT_BAM or WANT_GAM or WANT_VG_VCF or WANT_LINEAR_VCF or WANT_SV_REGIONS
-    or WANT_QC_FLAGSTAT or WANT_QC_VG_STATS
+    WANT_BAM or WANT_GAM or WANT_VG_VCF or WANT_VCF_FILTER or WANT_LINEAR_VCF
+    or WANT_SV_REGIONS or WANT_QC_FLAGSTAT or WANT_QC_MOSDEPTH or WANT_QC_VG_STATS
 )
 
 GRAPHS = load_graphs(config["graphs_csv"])
@@ -118,6 +120,10 @@ def merged_gam_path(wc):
     return f"{RES}/{wc.graph_id}/{wc.sample_id}/{wc.sample_id}.gam"
 
 
+def markdup_bam_path(wc):
+    return f"{RES}/{wc.graph_id}/{wc.sample_id}/{wc.sample_id}.markdup.bam"
+
+
 def surject_read_group(wc):
     return READ_GROUP.format(sample=wc.sample_id)
 
@@ -144,15 +150,20 @@ def done_inputs(wildcards):
         if WANT_GAM:
             req.extend(expand(merged_gam_path, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_BAM:
-            req.extend(expand(rules.giraffe_surject.output.bam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+            req.extend(expand(rules.mark_duplicates.output.bam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_VG_VCF:
             req.extend(expand(rules.vg_variant_call.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+        if WANT_VCF_FILTER:
+            req.extend(expand(rules.filter_vg_vcf.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+            req.extend(expand(rules.qc_vcf_stats.output, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_LINEAR_VCF:
             req.extend(expand(rules.small_variant_call.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_SV_REGIONS:
             req.extend(expand(rules.sv_regions.output.tsv, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_QC_FLAGSTAT:
             req.extend(expand(rules.qc_flagstat.output, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+        if WANT_QC_MOSDEPTH:
+            req.extend(expand(rules.qc_mosdepth.output.summary, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_QC_VG_STATS:
             req.extend(expand(rules.qc_vg_stats.output, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
     return req

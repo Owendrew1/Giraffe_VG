@@ -1,7 +1,7 @@
-# Giraffe mapping on cactus pangenome graphs.
+# Giraffe mapping on cactus pangenome graphs (James align_trifolium_reads pattern).
+# Per-lane map → merge GAMs → surject → mark duplicates → QC / VCF.
 # Run from repo root:
 #   ./scripts/run_giraffe.sh 4
-# Setup: conda env create -f environment.yaml  (Snakemake only; vg runs in conda per rule)
 
 configfile: "../config/config.yaml"
 include: "rules/common.smk"
@@ -111,8 +111,8 @@ rule giraffe_surject:
         gbz=rules.giraffe_index.output.gbz,
         gam=rules.merge_lane_gams.output.gam,
     output:
-        bam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam",
-        bai=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam.bai",
+        bam=temp(f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam"),
+        bai=temp(f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam.bai"),
     log:
         f"{LOG}/giraffe_surject/{{graph_id}}_{{sample_id}}.log",
     params:
@@ -134,10 +134,42 @@ rule giraffe_surject:
         """
 
 
-rule qc_flagstat:
+rule mark_duplicates:
     input:
         bam=rules.giraffe_surject.output.bam,
         bai=rules.giraffe_surject.output.bai,
+    output:
+        bam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.markdup.bam",
+        bai=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.markdup.bam.bai",
+        metrics=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.markdup.metrics.txt",
+    log:
+        f"{LOG}/mark_duplicates/{{graph_id}}_{{sample_id}}.log",
+    threads:
+        4,
+    resources:
+        mem_mb=MEM_MB,
+    params:
+        java_opts=lambda wc, resources: f"-Xmx{int(resources.mem_mb * 0.85)}m",
+    conda:
+        CONDA,
+    shell:
+        """
+        set -euo pipefail
+        exec > >(tee -a {log}) 2>&1
+        gatk --java-options "{params.java_opts}" MarkDuplicates \\
+          -I {input.bam} \\
+          -O {output.bam} \\
+          -M {output.metrics} \\
+          --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500 \\
+          --VALIDATION_STRINGENCY SILENT
+        samtools index -@ {threads} {output.bam}
+        """
+
+
+rule qc_flagstat:
+    input:
+        bam=rules.mark_duplicates.output.bam,
+        bai=rules.mark_duplicates.output.bai,
     output:
         f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.flagstat.txt",
     log:
@@ -146,6 +178,28 @@ rule qc_flagstat:
         CONDA,
     shell:
         "samtools flagstat {input.bam} > {output} 2> {log}"
+
+
+rule qc_mosdepth:
+    input:
+        bam=rules.mark_duplicates.output.bam,
+        bai=rules.mark_duplicates.output.bai,
+    output:
+        summary=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.mosdepth.summary.txt",
+        dist=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.mosdepth.global.dist.txt",
+    log:
+        f"{LOG}/qc_mosdepth/{{graph_id}}_{{sample_id}}.log",
+    params:
+        prefix=lambda wc: f"{RES}/{wc.graph_id}/{wc.sample_id}/{wc.sample_id}",
+    threads:
+        4,
+    conda:
+        CONDA,
+    shell:
+        """
+        set -euo pipefail
+        mosdepth -t {threads} -n --fast-mode {params.prefix} {input.bam} 2> {log}
+        """
 
 
 rule qc_vg_stats:
@@ -190,10 +244,44 @@ rule vg_variant_call:
         """
 
 
+rule filter_vg_vcf:
+    input:
+        vcf=rules.vg_variant_call.output.vcf,
+        tbi=rules.vg_variant_call.output.tbi,
+    output:
+        vcf=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.filtered.vcf.gz",
+        tbi=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.filtered.vcf.gz.tbi",
+    log:
+        f"{LOG}/filter_vg_vcf/{{graph_id}}_{{sample_id}}.log",
+    conda:
+        CONDA,
+    shell:
+        """
+        set -euo pipefail
+        # Basic QUAL filter; tighten once we have real call-set stats.
+        bcftools filter -e 'QUAL<20' -Oz -o {output.vcf} {input.vcf} 2> {log}
+        tabix -f -p vcf {output.vcf}
+        """
+
+
+rule qc_vcf_stats:
+    input:
+        vcf=rules.filter_vg_vcf.output.vcf,
+        tbi=rules.filter_vg_vcf.output.tbi,
+    output:
+        f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.filtered.bcftools_stats.txt",
+    log:
+        f"{LOG}/qc_vcf_stats/{{graph_id}}_{{sample_id}}.log",
+    conda:
+        CONDA,
+    shell:
+        "bcftools stats {input.vcf} > {output} 2> {log}"
+
+
 rule small_variant_call:
     input:
-        bam=rules.giraffe_surject.output.bam,
-        bai=rules.giraffe_surject.output.bai,
+        bam=rules.mark_duplicates.output.bam,
+        bai=rules.mark_duplicates.output.bai,
         ref=ref_path_for_graph,
     output:
         vcf=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.small_variants.vcf.gz",
@@ -222,9 +310,9 @@ rule small_variant_call:
 
 rule sv_regions:
     input:
-        bam=rules.giraffe_surject.output.bam,
+        bam=rules.mark_duplicates.output.bam,
         small_vcf=rules.small_variant_call.output.vcf,
-        vg_vcf=rules.vg_variant_call.output.vcf,
+        vg_vcf=rules.filter_vg_vcf.output.vcf,
     output:
         tsv=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.sv_regions.tsv",
     log:

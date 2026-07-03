@@ -1,13 +1,15 @@
+# Pangenome graph (Trep_pangenome outputs on scratch).
 pangenome_results_dir: "/scratch/odrew060/Trep_pangenome/results/trifolium_repens"
-pangenome_done_flag: "/scratch/odrew060/Trep_pangenome/results/trifolium_repens/trifolium_repens.d2.gbz"
+pangenome_done_flag: "/scratch/odrew060/Trep_pangenome/pangenome.done"
 
-linear_ref_dir: "/home/uottawa.o.univ/odrew060/github-repos/index_Trep_refs/results"
-linear_ref_use_haplotype_subdir: true
-index_done_flag: "/home/uottawa.o.univ/odrew060/github-repos/index_Trep_refs/results/UTM_Trep_v1.0/haploid/ref.done"
+# Linear UTM haploid for surject / GATK (index_Trep_refs on scratch).
+linear_ref_dir: "/scratch/references/trifolium/repens"
+linear_ref_use_haplotype_subdir: false
+index_done_flag: "/scratch/references/trifolium/repens/Trep_ref_indexing.done"
 
 graphs_csv: "../resources/graphs.csv"
 
-# James align_trifolium_reads TSV (column: sample). Discovered under fastq_dir.
+# James align_trifolium_reads TSV (column: sample). FASTQs discovered under fastq_dir.
 samples_file: "../resources/samples_test.tsv"
 # Full cohort: run scripts/sync_sample_sheet.sh, then:
 # samples_file: "../resources/all_clover_samples.txt"
@@ -16,16 +18,19 @@ output_dir: "/scratch/odrew060/Giraffe_vg"
 fastq_dir: "/archive/raw_data/fastq"
 skip_missing_fastqs: false
 
+# Parallelize across samples at the read stage (supervisor: 32–48 cores).
 cores: 32
 mem_mb: 32000
 read_group: "ID:{sample} SM:{sample} PL:ILLUMINA"
 
-# Test run: ERR14041371 — all primary outputs on (gam off to save disk).
+# Primary outputs (James-style post-alignment + pangenome-specific).
 outputs:
-  bam: true
-  gam: false
-  vg_call_vcf: true
+  bam: true                 # markdup BAM (after surject)
+  gam: false                # keep merged GAM (large)
+  vg_call_vcf: true         # vg call on graph
+  vcf_filter: true          # bcftools filter + stats on vg VCF
   linear_small_variants: false
   sv_regions: false
   qc_flagstat: true
+  qc_mosdepth: true
   qc_vg_stats: true
