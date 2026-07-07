@@ -83,7 +83,7 @@ rule merge_lane_gams:
             for lane in SAMPLE_LANES[wc.sample_id]
         ],
     output:
-        gam=merged_gam_output,
+        gam=temp(f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.merge.gam"),
     log:
         f"{LOG}/merge_lane_gams/{{graph_id}}_{{sample_id}}.log",
     params:
@@ -104,6 +104,17 @@ rule merge_lane_gams:
           vg view $(printf ' -G %s' "${{GAMS[@]}}") > '{output.gam}'
         fi
         """
+
+
+if WANT_GAM:
+
+    rule retain_merged_gam:
+        input:
+            gam=rules.merge_lane_gams.output.gam,
+        output:
+            gam=merged_gam_path,
+        shell:
+            "cp -a {input.gam} {output.gam}"
 
 
 rule giraffe_surject:
