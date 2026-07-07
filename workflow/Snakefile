@@ -83,7 +83,7 @@ rule merge_lane_gams:
             for lane in SAMPLE_LANES[wc.sample_id]
         ],
     output:
-        gam=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.gam",
+        gam=merged_gam_output,
     log:
         f"{LOG}/merge_lane_gams/{{graph_id}}_{{sample_id}}.log",
     params:

@@ -120,6 +120,11 @@ def merged_gam_path(wc):
     return f"{RES}/{wc.graph_id}/{wc.sample_id}/{wc.sample_id}.gam"
 
 
+def merged_gam_output(wc):
+    path = merged_gam_path(wc)
+    return path if WANT_GAM else temp(path)
+
+
 def markdup_bam_path(wc):
     return f"{RES}/{wc.graph_id}/{wc.sample_id}/{wc.sample_id}.markdup.bam"
 
