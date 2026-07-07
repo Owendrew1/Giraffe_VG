@@ -10,9 +10,8 @@ index_done_flag: "/scratch/references/trifolium/repens/Trep_ref_indexing.done"
 graphs_csv: "../resources/graphs.csv"
 
 # James align_trifolium_reads TSV (column: sample). FASTQs discovered under fastq_dir.
-samples_file: "../resources/samples_test.tsv"
-# Full cohort: run scripts/sync_sample_sheet.sh, then:
-# samples_file: "../resources/all_clover_samples.txt"
+# Test cohort: "../resources/samples_test.tsv"
+samples_file: "../resources/all_clover_samples.txt"
 
 output_dir: "/scratch/odrew060/Giraffe_vg"
 fastq_dir: "/archive/raw_data/fastq"
