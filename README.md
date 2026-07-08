@@ -36,7 +36,7 @@ Parallelize across **samples** at the read stage (`cores: 32`). Chromosome-level
 
 ```bash
 conda activate snakemake
-# edit config/config.yaml: samples_file, outputs
+# edit config/config.yaml: samples_file, archive_dir, scratch_dir, outputs
 ```
 
 Test cohort: `resources/samples_test.tsv` (2 samples). Full cohort: `scripts/sync_sample_sheet.sh` then point `samples_file` at `all_clover_samples.txt`.
@@ -54,18 +54,27 @@ Dry run:
 snakemake -s workflow/Snakefile --directory workflow --cores 4 -n -p --use-conda
 ```
 
-## Outputs (per sample under `{output_dir}/results/{graph_id}/{sample}/`)
+## Outputs
+
+Persistent results live on **archive**; scratch holds transient work, logs, and the rebuilt giraffe index.
+
+| Location | Contents |
+|----------|----------|
+| `{archive_dir}/results/{graph_id}/{sample}/` | markdup BAM, filtered VCF, QC |
+| `{scratch_dir}/work/` | temp GAMs, surject BAM, unfiltered VCF (auto-deleted) |
+| `{scratch_dir}/index/` | rebuilt graph index (symlinked gbz + dist/min) |
+| `{scratch_dir}/giraffe_logs/` | rule logs |
+
+Per sample on archive:
 
 | File | Role |
 |------|------|
-| `{sample}.gam` | Merged graph alignments (if `gam: true`) |
 | `{sample}.markdup.bam` | Surjected, duplicate-marked BAM |
 | `{sample}.markdup.metrics.txt` | Duplication rate |
 | `{sample}.flagstat.txt` | Alignment % |
 | `{sample}.mosdepth.summary.txt` | Coverage |
 | `{sample}.vg_stats.txt` | Pangenome-specific alignment stats |
-| `{sample}.vg_call.vcf.gz` | Graph variant calls |
-| `{sample}.vg_call.filtered.vcf.gz` | QUAL-filtered VCF |
+| `{sample}.vg_call.filtered.vcf.gz` | QUAL-filtered graph VCF |
 | `{sample}.vg_call.filtered.bcftools_stats.txt` | VCF QC |
 
-Done flag: `{output_dir}/giraffe.done`
+Done flag: `{archive_dir}/giraffe.done`

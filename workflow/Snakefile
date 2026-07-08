@@ -18,11 +18,11 @@ rule giraffe_index:
         index_done=INDEX_DONE,
         gbz=lambda wc: graph_input(wc, "gbz"),
     output:
-        gbz=f"{RES}/{{graph_id}}/index/graph.gbz",
-        dist=f"{RES}/{{graph_id}}/index/graph.dist",
-        min=f"{RES}/{{graph_id}}/index/graph.min",
-        zipcodes=f"{RES}/{{graph_id}}/index/graph.zipcodes",
-        done=f"{RES}/{{graph_id}}/index/index.done",
+        gbz=f"{IDX}/{{graph_id}}/graph.gbz",
+        dist=f"{IDX}/{{graph_id}}/graph.dist",
+        min=f"{IDX}/{{graph_id}}/graph.min",
+        zipcodes=f"{IDX}/{{graph_id}}/graph.zipcodes",
+        done=f"{IDX}/{{graph_id}}/index.done",
     log:
         f"{LOG}/giraffe_index/{{graph_id}}.log",
     params:
@@ -55,11 +55,11 @@ rule giraffe_map_lane:
         r1=lane_r1,
         r2=lane_r2,
     output:
-        gam=temp(f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.lane{{lane}}.gam"),
+        gam=temp(f"{WORK}/{{graph_id}}/{{sample_id}}/{{sample_id}}.lane{{lane}}.gam"),
     log:
         f"{LOG}/giraffe_map/{{graph_id}}_{{sample_id}}_lane{{lane}}.log",
     params:
-        outdir=sample_out,
+        outdir=work_sample_out,
     threads:
         CORES,
     resources:
@@ -79,15 +79,15 @@ rule giraffe_map_lane:
 rule merge_lane_gams:
     input:
         gams=lambda wc: [
-            f"{RES}/{wc.graph_id}/{wc.sample_id}/{wc.sample_id}.lane{lane}.gam"
+            f"{WORK}/{wc.graph_id}/{wc.sample_id}/{wc.sample_id}.lane{lane}.gam"
             for lane in SAMPLE_LANES[wc.sample_id]
         ],
     output:
-        gam=temp(f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.merge.gam"),
+        gam=temp(f"{WORK}/{{graph_id}}/{{sample_id}}/{{sample_id}}.merge.gam"),
     log:
         f"{LOG}/merge_lane_gams/{{graph_id}}_{{sample_id}}.log",
     params:
-        outdir=sample_out,
+        outdir=work_sample_out,
     threads:
         CORES,
     conda:
@@ -122,12 +122,12 @@ rule giraffe_surject:
         gbz=rules.giraffe_index.output.gbz,
         gam=rules.merge_lane_gams.output.gam,
     output:
-        bam=temp(f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam"),
-        bai=temp(f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam.bai"),
+        bam=temp(f"{WORK}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam"),
+        bai=temp(f"{WORK}/{{graph_id}}/{{sample_id}}/{{sample_id}}.surject.bam.bai"),
     log:
         f"{LOG}/giraffe_surject/{{graph_id}}_{{sample_id}}.log",
     params:
-        outdir=sample_out,
+        outdir=work_sample_out,
         read_group=surject_read_group,
     threads:
         CORES,
@@ -233,8 +233,8 @@ rule vg_variant_call:
         gam=rules.merge_lane_gams.output.gam,
         ref=ref_path_for_graph,
     output:
-        vcf=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz",
-        tbi=f"{RES}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz.tbi",
+        vcf=temp(f"{WORK}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz"),
+        tbi=temp(f"{WORK}/{{graph_id}}/{{sample_id}}/{{sample_id}}.vg_call.vcf.gz.tbi"),
     log:
         f"{LOG}/vg_variant_call/{{graph_id}}_{{sample_id}}.log",
     threads:
