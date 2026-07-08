@@ -38,12 +38,15 @@ def linear_ref_path(r, refs_dir, use_hap_subdir=False):
     return base / f"{r['linear_ref_assembly']}.fna"
 
 
-OUT = Path(config["output_dir"])
+ARCHIVE = Path(config["archive_dir"])
+SCRATCH = Path(config["scratch_dir"])
+RES = ARCHIVE / "results"
+WORK = SCRATCH / "work"
+IDX = SCRATCH / "index"
+LOG = f"{SCRATCH}/giraffe_logs"
+DONE = f"{ARCHIVE}/giraffe.done"
 PGD = Path(config["pangenome_results_dir"])
 REFS = config["linear_ref_dir"]
-LOG = f"{OUT}/giraffe_logs"
-DONE = f"{OUT}/giraffe.done"
-RES = OUT / "results"
 REGIONS_FILE = Path(workflow.basedir).parent / "config" / "regions.txt"
 
 PANGENOME_DONE = config["pangenome_done_flag"]
@@ -77,8 +80,6 @@ GRAPH_IDS = [g["graph_id"] for g in GRAPHS]
 
 SAMPLE_ROWS = load_sample_sheet(config["samples_file"])
 SAMPLE_IDS = [r["sample"] for r in SAMPLE_ROWS]
-PROJECT = {r["sample"]: r.get("initial_project", "") for r in SAMPLE_ROWS}
-COV_CAT = {r["sample"]: r.get("cov_cat", "") for r in SAMPLE_ROWS}
 
 SAMPLE_R1, SAMPLE_R2, SAMPLE_LANES, MISSING_FASTQS = discover_cohort(
     FASTQ_DIR,
@@ -89,8 +90,6 @@ if SKIP_MISSING:
     SAMPLE_IDS = [s for s in SAMPLE_IDS if s in SAMPLE_R1]
     SAMPLE_ROWS = [r for r in SAMPLE_ROWS if r["sample"] in SAMPLE_R1]
 
-SAMPLE_BY_ID = {r["sample"]: r for r in SAMPLE_ROWS}
-
 
 def graph_row(wc):
     return GRAPH_BY_ID[wc.graph_id]
@@ -98,10 +97,6 @@ def graph_row(wc):
 
 def graph_input(wc, kind):
     return str(PGD / graph_row(wc)[f"{kind}_basename"])
-
-
-def sample_row(wc):
-    return SAMPLE_BY_ID[wc.sample_id]
 
 
 def ref_path_for_graph(wc):
@@ -128,16 +123,16 @@ def surject_read_group(wc):
     return READ_GROUP.format(sample=wc.sample_id)
 
 
-def ref_path_name_for_graph(wc):
-    return graph_row(wc)["linear_ref_assembly"]
-
-
 def sample_out(wc):
     return f"{RES}/{wc.graph_id}/{wc.sample_id}"
 
 
+def work_sample_out(wc):
+    return f"{WORK}/{wc.graph_id}/{wc.sample_id}"
+
+
 def index_out(wc):
-    return f"{RES}/{wc.graph_id}/index"
+    return f"{IDX}/{wc.graph_id}"
 
 
 def regions_out(wc):
@@ -151,11 +146,11 @@ def done_inputs(wildcards):
             req.extend(expand(merged_gam_path, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_BAM:
             req.extend(expand(rules.mark_duplicates.output.bam, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
-        if WANT_VG_VCF:
-            req.extend(expand(rules.vg_variant_call.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_VCF_FILTER:
             req.extend(expand(rules.filter_vg_vcf.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
             req.extend(expand(rules.qc_vcf_stats.output, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
+        elif WANT_VG_VCF:
+            req.extend(expand(rules.vg_variant_call.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_LINEAR_VCF:
             req.extend(expand(rules.small_variant_call.output.vcf, graph_id=GRAPH_IDS, sample_id=SAMPLE_IDS))
         if WANT_SV_REGIONS:

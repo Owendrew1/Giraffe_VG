@@ -13,7 +13,9 @@ graphs_csv: "../resources/graphs.csv"
 # Test cohort: "../resources/samples_test.tsv"
 samples_file: "../resources/all_clover_samples.txt"
 
-output_dir: "/scratch/odrew060/Giraffe_vg"
+# Persistent outputs (BAM, VCF, QC) on archive; scratch holds temps, logs, and rebuilt index.
+archive_dir: "/archive/odrew060/Giraffe_vg"
+scratch_dir: "/scratch/odrew060/Giraffe_vg"
 fastq_dir: "/archive/raw_data/fastq"
 skip_missing_fastqs: false
 
@@ -22,7 +24,7 @@ cores: 32
 mem_mb: 32000
 read_group: "ID:{sample} SM:{sample} PL:ILLUMINA"
 
-# Primary outputs (James-style post-alignment + pangenome-specific).
+# Primary outputs (post-alignment + pangenome-specific).
 outputs:
   bam: true                 # markdup BAM (after surject)
   gam: false                # keep merged GAM (large)
