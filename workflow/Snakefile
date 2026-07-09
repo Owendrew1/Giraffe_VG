@@ -101,7 +101,7 @@ rule merge_lane_gams:
         if [ "${{#GAMS[@]}}" -eq 1 ]; then
           cp "${{GAMS[0]}}" '{output.gam}'
         else
-          vg view $(printf ' -G %s' "${{GAMS[@]}}") > '{output.gam}'
+          cat "${{GAMS[@]}}" > '{output.gam}'
         fi
         """
 
