@@ -30,7 +30,9 @@ Giraffe_vg/
 | flagstat, mosdepth | flagstat, mosdepth + `vg stats` |
 | — | `vg call` → filter → `bcftools stats` |
 
-Parallelize across **samples** at the read stage (`cores: 32`). Chromosome-level BAM/VCF split is a later step once full-sample outputs exist.
+Parallelize across **samples** at map time: `map_threads: 2` per `vg giraffe` job and
+`./scripts/run_giraffe.sh 48` (up to ~24 lane maps at once on 48 cores). Heavy steps
+(surject, vg call) use `heavy_threads: 32`.
 
 ## Setup
 

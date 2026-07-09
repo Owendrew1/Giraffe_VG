@@ -28,7 +28,7 @@ rule giraffe_index:
     params:
         outdir=index_out,
     threads:
-        CORES,
+        HEAVY_THREADS,
     conda:
         CONDA,
     shell:
@@ -61,7 +61,7 @@ rule giraffe_map_lane:
     params:
         outdir=work_sample_out,
     threads:
-        CORES,
+        MAP_THREADS,
     resources:
         mem_mb=MEM_MB,
     conda:
@@ -89,7 +89,7 @@ rule merge_lane_gams:
     params:
         outdir=work_sample_out,
     threads:
-        CORES,
+        1,
     conda:
         CONDA,
     shell:
@@ -130,7 +130,7 @@ rule giraffe_surject:
         outdir=work_sample_out,
         read_group=surject_read_group,
     threads:
-        CORES,
+        HEAVY_THREADS,
     conda:
         CONDA,
     shell:
@@ -238,7 +238,7 @@ rule vg_variant_call:
     log:
         f"{LOG}/vg_variant_call/{{graph_id}}_{{sample_id}}.log",
     threads:
-        CORES,
+        HEAVY_THREADS,
     conda:
         CONDA,
     shell:
@@ -302,7 +302,7 @@ rule small_variant_call:
     params:
         sample=lambda wc: wc.sample_id,
     threads:
-        CORES,
+        HEAVY_THREADS,
     conda:
         CONDA,
     shell:

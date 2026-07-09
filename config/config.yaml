@@ -19,8 +19,12 @@ scratch_dir: "/scratch/odrew060/Giraffe_vg"
 fastq_dir: "/archive/raw_data/fastq"
 skip_missing_fastqs: false
 
-# Parallelize across samples at the read stage (supervisor: 32–48 cores).
-cores: 32
+# Snakemake --cores budget (pass same value to scripts/run_giraffe.sh).
+snakemake_cores: 48
+# Threads per giraffe_map_lane job (vg giraffe -t). Low value => many samples in parallel.
+map_threads: 2
+# Threads for index / surject / vg call (large RAM; usually one job at a time).
+heavy_threads: 32
 mem_mb: 32000
 read_group: "ID:{sample} SM:{sample} PL:ILLUMINA"
 
