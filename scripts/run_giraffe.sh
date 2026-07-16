@@ -3,4 +3,4 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-exec snakemake -s workflow/Snakefile --directory workflow --cores "${1:-48}" -p --use-conda
+exec snakemake -s workflow/Snakefile --directory workflow --cores "${1:-48}" -p --use-conda --rerun-incomplete
